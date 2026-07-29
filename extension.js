@@ -7,7 +7,7 @@ const { spawn, spawnSync } = require("child_process");
 const WATCHER = "watch_agents.py";
 
 let server = null;    // watcher process, when this window is the one that started it
-let output = null;    // "Agent Exhibit" output channel
+let output = null;    // "Agent Max" output channel
 let tab = null;       // the single editor-tab webview, reused
 
 function log(line) {
@@ -15,7 +15,7 @@ function log(line) {
 }
 
 function cfg() {
-  const c = vscode.workspace.getConfiguration("agentExhibit");
+  const c = vscode.workspace.getConfiguration("agentMax");
   return {
     python: c.get("pythonPath", "").trim(),
     port: c.get("port", 8780),
@@ -106,7 +106,7 @@ async function startWatcher() {
 
   const py = findPython();
   if (!py) {
-    throw new Error("no Python 3 interpreter found. Install Python 3.9 or later, or set agentExhibit.pythonPath.");
+    throw new Error("no Python 3 interpreter found. Install Python 3.9 or later, or set agentMax.pythonPath.");
   }
 
   const args = [...py.prefix, WATCHER, "--port", String(port),
@@ -154,9 +154,9 @@ function failedHtml(reason) {
     <h3>Could not start the agent watcher.</h3>
     <p>${escapeHtml(reason || "")}</p>
     <p>It needs Python 3.9 or later on your PATH. If Python is installed somewhere
-       unusual, set <code>agentExhibit.pythonPath</code> in Settings.</p>
-    <p>Run <em>Agent Exhibit: Show Logs</em> for the full output, then
-       <em>Agent Exhibit: Restart Watcher</em>.</p>
+       unusual, set <code>agentMax.pythonPath</code> in Settings.</p>
+    <p>Run <em>Agent Max: Show Logs</em> for the full output, then
+       <em>Agent Max: Restart Watcher</em>.</p>
   </div>`);
 }
 
@@ -167,7 +167,7 @@ function escapeHtml(s) {
 
 // ── views ─────────────────────────────────────────────────────────────────
 
-class ExhibitViewProvider {
+class AgentMaxViewProvider {
   async resolveWebviewView(view) {
     this.view = view;
     view.webview.options = { enableScripts: true };
@@ -202,7 +202,7 @@ async function openAsTab() {
   }
 
   tab = vscode.window.createWebviewPanel(
-    "agentExhibit.tab", "Agents",
+    "agentMax.tab", "Agents",
     { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
     { enableScripts: true, retainContextWhenHidden: true }
   );
@@ -223,19 +223,19 @@ async function openAsTab() {
 // ── lifecycle ─────────────────────────────────────────────────────────────
 
 function activate(context) {
-  output = vscode.window.createOutputChannel("Agent Exhibit");
-  const provider = new ExhibitViewProvider();
+  output = vscode.window.createOutputChannel("Agent Max");
+  const provider = new AgentMaxViewProvider();
 
   context.subscriptions.push(
     output,
-    vscode.window.registerWebviewViewProvider("agentExhibit.dashboard", provider),
+    vscode.window.registerWebviewViewProvider("agentMax.dashboard", provider),
 
-    vscode.commands.registerCommand("agentExhibit.open", () => openAsTab()),
+    vscode.commands.registerCommand("agentMax.open", () => openAsTab()),
 
-    vscode.commands.registerCommand("agentExhibit.focusPanel", () =>
-      vscode.commands.executeCommand("agentExhibit.dashboard.focus")),
+    vscode.commands.registerCommand("agentMax.focusPanel", () =>
+      vscode.commands.executeCommand("agentMax.dashboard.focus")),
 
-    vscode.commands.registerCommand("agentExhibit.restart", async () => {
+    vscode.commands.registerCommand("agentMax.restart", async () => {
       stopWatcher();
       await provider.reload();
       if (tab) {
@@ -244,13 +244,13 @@ function activate(context) {
         try { await startWatcher(); tab.webview.html = frameHtml(port); }
         catch (err) { tab.webview.html = failedHtml(err.message); }
       }
-      vscode.window.showInformationMessage("Agent Exhibit: watcher restarted.");
+      vscode.window.showInformationMessage("Agent Max: watcher restarted.");
     }),
 
-    vscode.commands.registerCommand("agentExhibit.openExternal", () =>
+    vscode.commands.registerCommand("agentMax.openExternal", () =>
       vscode.env.openExternal(vscode.Uri.parse(`http://localhost:${cfg().port}/`))),
 
-    vscode.commands.registerCommand("agentExhibit.showLogs", () => output.show(true)),
+    vscode.commands.registerCommand("agentMax.showLogs", () => output.show(true)),
 
     { dispose: stopWatcher }
   );

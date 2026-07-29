@@ -1,4 +1,6 @@
-# Agent Exhibit
+<img src="docs/logo.png" alt="" width="84" align="left" hspace="14" vspace="4">
+
+# Agent Max
 
 A live view of what your Claude Code agents are actually doing.
 
@@ -69,31 +71,31 @@ number in the output back to the call that produced it.
 script with no pip dependencies, bundled with the extension.
 
 It is found automatically: `py -3` on Windows, then `python3`, then `python`.
-If yours lives somewhere unusual, set `agentExhibit.pythonPath`.
+If yours lives somewhere unusual, set `agentMax.pythonPath`.
 
 ## Use
 
-Open the **Agents** panel at the bottom, or run **Agent Exhibit: Open Beside
+Open the **Agents** panel at the bottom, or run **Agent Max: Open Beside
 Editor** from the command palette. The watcher starts on first open.
 
 | Command | |
 |---|---|
-| `Agent Exhibit: Open Beside Editor` | opens it as an editor tab |
-| `Agent Exhibit: Show in Bottom Panel` | focuses the panel view |
-| `Agent Exhibit: Restart Watcher` | stops and restarts the local process |
-| `Agent Exhibit: Open in Browser` | opens the same page outside VS Code |
-| `Agent Exhibit: Show Logs` | the output channel, when something is wrong |
+| `Agent Max: Open Beside Editor` | opens it as an editor tab |
+| `Agent Max: Show in Bottom Panel` | focuses the panel view |
+| `Agent Max: Restart Watcher` | stops and restarts the local process |
+| `Agent Max: Open in Browser` | opens the same page outside VS Code |
+| `Agent Max: Show Logs` | the output channel, when something is wrong |
 
 ## Settings
 
 | Setting | Default | |
 |---|---|---|
-| `agentExhibit.pythonPath` | auto | Interpreter used to run the watcher |
-| `agentExhibit.port` | `8780` | Localhost port |
-| `agentExhibit.limit` | `16` | Transcripts watched at once |
-| `agentExhibit.recentMinutes` | `90` | Hide agents idle longer than this. `0` shows all |
-| `agentExhibit.autoStart` | `true` | Start the watcher when the view opens |
-| `agentExhibit.watcherDir` | bundled | Point at your own copy of the watcher |
+| `agentMax.pythonPath` | auto | Interpreter used to run the watcher |
+| `agentMax.port` | `8780` | Localhost port |
+| `agentMax.limit` | `16` | Transcripts watched at once |
+| `agentMax.recentMinutes` | `90` | Hide agents idle longer than this. `0` shows all |
+| `agentMax.autoStart` | `true` | Start the watcher when the view opens |
+| `agentMax.watcherDir` | bundled | Point at your own copy of the watcher |
 
 `limit` is worth knowing about. Agents past the cap are hidden without warning,
 so if a run fans out wider than you expected, raise it.
