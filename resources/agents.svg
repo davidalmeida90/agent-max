@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+  <!-- one lead over three workers: the exhibit, in miniature -->
+  <rect x="9" y="2" width="6" height="4.5" rx="0.6"/>
+  <path d="M12 6.5 v3 M4.5 9.5 h15 M4.5 9.5 v4 M12 9.5 v4 M19.5 9.5 v4"/>
+  <rect x="1.5" y="13.5" width="6" height="4.5" rx="0.6"/>
+  <rect x="9" y="13.5" width="6" height="4.5" rx="0.6"/>
+  <rect x="16.5" y="13.5" width="6" height="4.5" rx="0.6"/>
+</svg>

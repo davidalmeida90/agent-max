@@ -1,0 +1,1926 @@
+<meta charset="utf-8">
+<title>Exhibit 1 — Orchestrator-Workers Pipeline, Live</title>
+<style>
+  :root {
+    --paper:   #FBFAF7;
+    --panel:   #FFFFFF;
+    --ink:     #14181F;
+    --muted:   #6B7280;
+    /* Carries the 8-9px mono micro labels. #9AA0A8 measured 2.64:1 on paper,
+       which fails WCAG AA and turns to mush under video compression. This is
+       the lightest grey that still clears 4.5:1. */
+    --faint:   #6E757D;
+    --rule:    #DAD7D0;
+    --navy:    #0B2545;
+    --wine:    #8B2635;
+    --fill:    #EDEBE5;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
+    --sans: "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  /* Card width is measured from the container, so the vertical scrollbar has to
+     be accounted for before the measurement. Without a reserved gutter the
+     board is laid out scrollbar-free, grows taller, the scrollbar appears, and
+     the layout is suddenly ~15px too wide. */
+  html { scrollbar-gutter: stable; }
+
+  body {
+    margin: 0;
+    padding: 16px 22px 40px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* tab strip */
+  .tabs {
+    display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--ink); margin-bottom: 14px;
+  }
+  .tab {
+    font: inherit; font-size: 11px; letter-spacing: .06em;
+    background: none; border: 0; border-bottom: 2px solid transparent;
+    padding: 6px 12px 7px; cursor: pointer; color: var(--muted);
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--navy); }
+  /* Must be allowed to shrink: nowrap plus a badge made this wider than a
+     narrow window and pushed the whole page into horizontal scroll. */
+  .tabs .watching {
+    margin-left: auto; font-family: var(--mono); font-size: 10.5px;
+    color: var(--ink); padding: 0 12px;
+    border-left: 1px solid var(--rule);
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tabs .watching .wk {
+    color: var(--faint); font-size: 8.5px; letter-spacing: .09em;
+    text-transform: uppercase; margin-right: 5px;
+  }
+  .tabs .watching .wq { color: var(--faint); }
+  /* Which window this session belongs to, and how long its prompt cache has
+     left. Two sessions open at once look identical without the first, and the
+     first call after the cache lapses costs ten times the one before it. */
+  .tabs .watching .wsrc, .tabs .watching .wcache {
+    margin-left: 8px; padding: 1px 6px; font-family: var(--mono);
+    font-size: 9px; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--muted); border: 1px solid var(--rule);
+  }
+  .tabs .watching .wcache.cold { color: var(--wine); border-color: #D8B4A8; }
+  /* Another conversation is live and you are not looking at it. */
+  .tabs .watching .wo {
+    margin-left: 10px; padding: 1px 7px; font-size: 9px;
+    letter-spacing: .05em; text-transform: uppercase;
+    color: #8A6A24; border: 1px solid #C9AC6B; background: #FCFAF4;
+  }
+  .tabs .totals {
+    font-family: var(--mono); font-size: 10.5px;
+    color: var(--faint); padding-right: 4px;
+  }
+
+  /* The roster: every agent, its assignment and its last action, in one table
+     above the diagram. Reads top to bottom without decoding the tree. */
+  /* Three rows plus the header, then scroll. A viewport-relative cap gave a
+     different number of visible agents on every screen; a row count does not,
+     and it leaves a predictable amount of room for the tree underneath.
+     The real cap is set inline by sizeRoster() from the measured rows — rows
+     wrap, so their height is not a constant. This is the pre-paint fallback. */
+  .crew-wrap {
+    border: 1px solid var(--rule); background: var(--panel);
+    margin-bottom: 14px; overflow: auto;
+    max-height: 128px;
+  }
+  table.crew { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  table.crew th {
+    position: sticky; top: 0; z-index: 2; background: var(--panel);
+    text-align: left; font-family: var(--mono); font-weight: 400;
+    font-size: 8.5px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--faint); padding: 6px 10px 5px;
+    border-bottom: 1px solid var(--ink); white-space: nowrap;
+  }
+  table.crew td {
+    padding: 5px 10px; border-bottom: 1px solid var(--rule);
+    vertical-align: baseline; color: var(--muted);
+  }
+  table.crew tr:last-child td { border-bottom: 0; }
+  table.crew tbody tr { cursor: pointer; }
+  table.crew tbody tr:hover td { background: #F6F4EF; }
+  table.crew tr.on td { background: #F1EEE6; box-shadow: inset 2px 0 0 var(--navy); }
+  table.crew tr.orphan .nm { color: var(--wine); }
+  table.crew .nm {
+    color: var(--ink); font-weight: 600; letter-spacing: .02em; white-space: nowrap;
+  }
+  table.crew .lvl {
+    font-family: var(--mono); font-size: 8.5px; color: var(--faint);
+    margin-left: 6px; font-weight: 400;
+  }
+  /* "opus 5 xhigh" wrapping onto three lines turned every row into three rows
+     worth of height, which costs the panel layout more than the column is
+     worth. It is short text; give it one line. */
+  table.crew .mdl { white-space: nowrap; }
+  /* Status reads as a word, not just a colour, so it survives a screenshot and
+     a colour-blind reader. The dot in the name column carries the same signal. */
+  .state {
+    font-family: var(--mono); font-size: 9px; letter-spacing: .07em;
+    text-transform: uppercase; padding: 2px 6px; white-space: nowrap;
+    border: 1px solid var(--rule); color: var(--muted); background: var(--paper);
+  }
+  .state.active   { border-color: var(--navy); color: var(--navy); font-weight: 600; }
+  .state.waiting  { border-color: #C9AC6B; color: #8A6A24; }
+  .state.stalled  { border-color: #C9AC6B; color: #8A6A24; }
+  .state.orphaned { border-color: var(--wine); color: var(--wine); font-weight: 600; }
+  .state.idle, .state.done { color: var(--faint); }
+
+  table.crew .mono { font-family: var(--mono); }
+  table.crew .sm { font-size: 10px; }
+  table.crew .num { text-align: right; white-space: nowrap; }
+  table.crew .when { white-space: nowrap; color: var(--muted); }
+  table.crew .act b { color: var(--navy); font-weight: 400; }
+  /* the two columns that can run long share whatever width is left */
+  table.crew .doing, table.crew .act {
+    max-width: 0; width: 34%; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* Agents that are not currently deployed. Same cards as the tree, at the
+     same width, simply not wired into the hierarchy — a finished agent has no
+     live relationship to draw a branch to. */
+  .parked { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--rule); }
+  .parked .bh {
+    font-family: var(--mono); font-size: 9px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--faint); margin: 0 0 10px 2px;
+  }
+  .parked .slots {
+    display: grid; grid-template-columns: repeat(auto-fill, var(--card, 300px));
+    gap: var(--gap, 16px); justify-content: center;
+  }
+
+  /* Zoom control, fixed to the viewport so scrolling never takes it away. */
+  .zoomer {
+    position: fixed; right: 14px; bottom: 16px; z-index: 40;
+    display: flex; align-items: stretch;
+    background: var(--panel); border: 1px solid var(--rule);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .10);
+  }
+  .zoomer button {
+    font: inherit; background: none; border: 0; cursor: pointer;
+    color: var(--muted); padding: 5px 9px;
+  }
+  .zoomer button:hover { color: var(--ink); background: #F6F4EF; }
+  .zoomer .zbtn { font-size: 15px; line-height: 1; width: 30px; }
+  .zoomer .zlbl {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .04em;
+    border-left: 1px solid var(--rule); border-right: 1px solid var(--rule);
+    min-width: 74px; color: var(--ink);
+  }
+  .zoomer button:disabled { opacity: .35; cursor: default; background: none; }
+
+  /* Dialogue: the agent-to-agent thread, read as a chat. Alternating sides
+     make it obvious at a glance when the conversation changes hands. */
+  .thread { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 24px; }
+  .turn {
+    align-self: flex-start; max-width: min(60ch, 78%);
+    background: var(--panel); border: 1px solid var(--navy);
+    border-radius: 14px 14px 14px 3px; padding: 9px 13px 10px;
+  }
+  .turn.alt {
+    align-self: flex-end; border-radius: 14px 14px 3px 14px;
+    background: #FCFBF8;
+  }
+  .turn.spawn { border-color: #C9AC6B; background: #FCFAF4; }
+  /* an answer coming back up the tree */
+  .turn.reply { border-color: var(--rule); background: var(--paper); }
+  .turn.reply .meta b { color: var(--ink); }
+  .turn .meta {
+    font-family: var(--mono); font-size: 9px; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--faint); margin-bottom: 5px;
+    display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  }
+  .turn .meta b { color: var(--navy); font-weight: 400; }
+  .turn.spawn .meta b { color: #8A6A24; }
+  .turn .meta .arw { color: var(--faint); }
+  .turn .meta .t2 { margin-left: auto; }
+  .turn p {
+    margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink);
+    font-style: italic;
+  }
+  .thread .empty {
+    align-self: center; max-width: 46ch; text-align: center;
+    color: var(--muted); font-size: 12px; padding: 26px 0;
+  }
+
+  /* one row per depth level, so children sit under whoever spawned them */
+  .tier { margin-bottom: 0; }
+  .tier-label {
+    font-family: var(--mono); font-size: 9px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--faint); margin: 0 0 6px 2px;
+  }
+
+
+  /* speech bubbles: what a live agent is saying, popping out of its node.
+     They are absolutely positioned so they reserve no space of their own. The
+     top padding clears the first row; the row gap clears every row after it,
+     which is what stops a wrapped fan-out from stamping its bubbles through
+     the cards above. */
+  .agents.speaking { padding-top: 74px; row-gap: 82px; }
+  .exhibit { overflow: visible; }
+  .tier + .tier, .link + .tier { margin-top: 0; }
+  .node { position: relative; }
+  .bubble {
+    position: absolute; bottom: calc(100% + 10px); left: -6px; right: -6px;
+    background: var(--panel); border: 1px solid var(--navy);
+    box-shadow: 3px 3px 0 rgba(11, 37, 69, .07);
+    padding: 8px 10px; font-size: 11px; line-height: 1.42;
+    font-style: italic; color: var(--ink); z-index: 6;
+    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+    overflow: hidden;
+    animation: pop .35s cubic-bezier(.2, .9, .3, 1.2) both;
+  }
+  /* little stem pointing down into the node */
+  .bubble::after,
+  .bubble::before {
+    content: ""; position: absolute; top: 100%; left: 22px;
+    border: 6px solid transparent; border-top-color: var(--navy);
+  }
+  .bubble::after { border-width: 5px; left: 23px; border-top-color: var(--panel); }
+  @keyframes pop {
+    from { opacity: 0; transform: translateY(7px) scale(.985); }
+    to   { opacity: 1; transform: none; }
+  }
+  .bubble .lbl {
+    display: block; font-family: var(--mono); font-style: normal;
+    font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 3px;
+  }
+
+  /* click a node: it grows in place and shows its history */
+  .node { cursor: pointer; }
+  .node:hover { box-shadow: 0 0 0 1px var(--navy); }
+  .node:focus-visible, table.crew tbody tr:focus-visible {
+    outline: 2px solid var(--navy); outline-offset: 2px;
+  }
+  /* The opened agent, floating over the board. Fixed rather than in-grid, so
+     opening one card never moves the others. */
+  .overlay {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(20, 24, 31, .28);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .overlay[hidden] { display: none; }
+  .overlay .node.expanded {
+    cursor: default; width: min(860px, 94vw); max-height: 88vh;
+    overflow-y: auto; background: var(--panel);
+    border: 1px solid var(--ink); box-shadow: 0 18px 48px rgba(0,0,0,.22);
+    padding: 16px 20px 18px;
+    animation: rise .16s ease-out both;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px) scale(.99); }
+    to   { opacity: 1; transform: none; }
+  }
+  /* inside the overlay the card has room, so nothing needs clamping */
+  .overlay .node .job,
+  .overlay .node .says { -webkit-line-clamp: unset; display: block; }
+  .overlay .node .history { max-height: none; }
+  .overlay .node .last .ld { white-space: normal; }
+  .back {
+    font: inherit; font-size: 10.5px; letter-spacing: .06em;
+    background: none; border: 1px solid var(--rule); color: var(--muted);
+    padding: 3px 9px; cursor: pointer; margin-bottom: 10px;
+  }
+  .back:hover { color: var(--ink); border-color: var(--navy); }
+  .history {
+    margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--rule);
+    max-height: 46vh; overflow-y: auto;
+  }
+  .history h4 {
+    font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin: 14px 0 7px;
+  }
+  .history h4:first-child { margin-top: 0; }
+  .history .line {
+    border-left: 2px solid var(--rule); padding: 1px 0 1px 10px;
+    margin-bottom: 8px; font-size: 11.5px; color: var(--muted); line-height: 1.45;
+  }
+  .history .line b {
+    display: block; font-family: var(--mono); font-size: 9px;
+    color: var(--faint); font-weight: 400; margin-bottom: 2px;
+  }
+
+  /* filter bar */
+  /* Wrapping alone is not enough: a flex item whose content is wider than the
+     line still refuses to shrink past its min-content size and pushes out. */
+  .bar > * { min-width: 0; }
+  .bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+    padding: 0 0 16px; margin-bottom: 16px;
+    border-bottom: 1px solid var(--rule);
+    font-size: 11px; color: var(--muted);
+  }
+  /* Session titles are long, and a select sizes itself to its widest option,
+     so without a cap the filter bar alone pushed the page into horizontal
+     scroll on a narrow window. */
+  .bar label { display: inline-flex; align-items: center; gap: 6px;
+               min-width: 0; max-width: 100%; }
+  .bar select { max-width: 100%; }
+  #f-session { max-width: min(420px, 100%); }
+  #f-projects { max-width: min(260px, 100%); }
+  /* An element rule with `display` beats the UA stylesheet's [hidden] rule, so
+     without this the hidden picker stays on screen. */
+  .bar label[hidden] { display: none; }
+  .bar select {
+    font: inherit; font-size: 11px; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--rule); padding: 3px 5px; border-radius: 0;
+  }
+  .bar .chk { cursor: pointer; }
+  .bar input[type=checkbox] { accent-color: var(--navy); margin: 0; }
+  .bar .hint { color: var(--faint); font-size: 10px; }
+  .bar .count { margin-left: auto; font-family: var(--mono); color: var(--faint); }
+
+  /* group heading when not grouping by session */
+  .group-h {
+    font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin: 18px 0 8px;
+  }
+  .node.orphan { border-color: var(--wine); }
+  .node.orphan .role { color: var(--wine); }
+
+
+  /* ---- diagram ------------------------------------------------------- */
+  .exhibit {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    padding: 30px 34px 22px;
+  }
+  /* auto-fit so however many workers exist, they pack into rows that fit */
+  /* Cards keep a sane width and centre themselves, so a tier holding one agent
+     doesn't stretch it across the whole panel. */
+  /* Cards spread laterally across the full width of their tier, as they did
+     before the tree layout. Only a tier holding a single agent is reined in,
+     so it doesn't stretch edge to edge on its own. */
+  /* Every card is the same size at every level — the tier just holds more or
+     fewer of them. The grid, the branch lines above it and the balloons below
+     all share one width, so a branch drops onto a card instead of past it. */
+  /* --card and --gap are solved in JS from the space actually available and
+     set on #tiers, so every card on the board is the same size and that size
+     follows the window instead of overflowing it. */
+  #tiers { --card: 300px; --gap: 16px; transform-origin: top left; }
+  /* A scaled child still reserves its unscaled height, so the wrapper trims the
+     empty space the transform leaves under the board. */
+  .exhibit { position: relative; }
+  .tier {
+    --w: calc(var(--cols, 3) * var(--card) + (var(--cols, 3) - 1) * var(--gap));
+    width: 100%;
+  }
+  .agents {
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 3), var(--card));
+    gap: var(--gap);
+    width: var(--w); margin: 0 auto;
+    justify-content: center;
+  }
+  .tier > .link, .tier > .wires, .tier > .tier-label {
+    width: var(--w); margin-left: auto; margin-right: auto;
+  }
+
+  /* Only min-width survives here: a grid child needs it to be allowed to
+     shrink. The rest restated base values, and the .13em tracking silently
+     overrode the tighter setting that stops long names truncating — so a card
+     in the tree and the same card in the overlay disagreed. */
+  .agents .node { min-width: 0; }
+  .link { display: block; width: 100%; height: 22px; }
+  /* preserveAspectRatio="none" stretches x far more than y, which would render
+     vertical strokes as thick blocks. non-scaling-stroke keeps them 1px. */
+  .link path {
+    fill: none; stroke: var(--rule); stroke-width: 1.25;
+    vector-effect: non-scaling-stroke;
+  }
+  .link path.on { stroke: var(--navy); stroke-width: 1.75; }
+  .link path.flow {
+    stroke: var(--navy); stroke-width: 1.75;
+    stroke-dasharray: 5 7;
+    animation: march 1.1s linear infinite;
+  }
+  @keyframes march { to { stroke-dashoffset: -24; } }
+
+  /* ---- node ---------------------------------------------------------- */
+  .node {
+    border: 1px solid var(--rule);
+    background: var(--panel);
+    padding: 12px 14px 13px;
+    min-width: 210px;
+  }
+  .node.on   { border-color: var(--navy); box-shadow: inset 0 0 0 1px var(--navy); }
+  .node.done { border-color: #B9BDB4; }
+  .node.terminal { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .node.terminal .k, .node.terminal .role { color: rgba(255,255,255,.66); }
+  .node.terminal .headline { color: #fff; }
+
+  .node-top {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 10px; margin-bottom: 9px;
+  }
+  /* Tracking was .13em, which cost about 30px on a long name and truncated
+     "ORCHESTRATOR" to "ORCHESTRA...". The name matters more than the spacing. */
+  .role {
+    font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+    font-weight: 600; color: var(--muted);
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1 1 auto;
+  }
+  /* Must be allowed to shrink. A full model id is wider than a narrow card, and
+     an unshrinkable badge pushes the whole board into horizontal scroll. */
+  .badge {
+    font-family: var(--mono); font-size: 10px; color: var(--faint);
+    white-space: nowrap; flex: 0 1 auto; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    margin-right: 6px; vertical-align: 1px;
+    border: 1px solid var(--faint); background: transparent;
+  }
+  .dot.on   { background: var(--navy); border-color: var(--navy); animation: pulse 1.5s ease-in-out infinite; }
+  .dot.done { background: #B9BDB4; border-color: #B9BDB4; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .28; } }
+
+  /* context meter */
+  .meter { height: 5px; background: var(--fill); margin: 2px 0 9px; }
+  .meter > i { display: block; height: 100%; background: var(--navy); transition: width .4s ease; }
+  /* A window about to fill is worth seeing before it does. This session hit
+     its limit twice and compacted away 2M tokens with nothing on screen to
+     say so, which is exactly the moment the numbers stop making sense. */
+  .meter.hot > i  { background: #B8860B; }
+  .meter.full > i { background: var(--wine); }
+  .warn {
+    font-family: var(--mono); font-size: 9px; letter-spacing: .06em;
+    text-transform: uppercase; margin: 7px 0 0; padding: 3px 6px;
+    border-left: 2px solid var(--wine); color: var(--wine); background: #FBF6F4;
+  }
+  .warn.near { border-left-color: #B8860B; color: #8A6508; background: #FBF8F0; }
+  /* The compaction detail only appears on the opened card. On a collapsed one
+     it crowded out "last said", which is the line that tells you what the
+     agent is actually doing, and that matters more at a glance. */
+  .warn.compacted { text-transform: none; letter-spacing: .02em; line-height: 1.5; }
+  .warn.compacted b { letter-spacing: .06em; text-transform: uppercase; }
+  .warn.compacted .cline { display: block; color: var(--muted); font-size: 9px; }
+
+  /* stat grid inside a node */
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 14px; }
+  .k { font-size: 10.5px; color: var(--muted); }
+  .v { font-family: var(--mono); font-size: 12.5px; text-align: right; }
+
+  /* What the agent was sent to do — the card says who, this says why. */
+  /* sits directly above the context meter, so it needs clearance or the meter
+     track reads as an underline on the last line of text */
+  .job {
+    margin: 5px 0 9px; font-size: 11.5px; line-height: 1.35; color: var(--muted);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .last {
+    margin-top: 9px; padding-top: 8px; border-top: 1px dotted var(--rule);
+    display: grid; grid-template-columns: auto 1fr auto; gap: 0 7px;
+    align-items: baseline;
+  }
+  .last .lk {
+    grid-column: 1 / -1; font-family: var(--mono); font-size: 8.5px;
+    letter-spacing: .09em; text-transform: uppercase; color: var(--faint);
+    margin-bottom: 2px;
+  }
+  .last .lt { font-family: var(--mono); font-size: 10.5px; color: var(--navy); }
+  .last .ld {
+    font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+  }
+  .last .lz { font-family: var(--mono); font-size: 9.5px; color: var(--faint); }
+
+  /* age and spawn count, the two things you check without opening the card */
+  .foot {
+    display: flex; justify-content: space-between; gap: 10px; margin-top: 7px;
+    font-family: var(--mono); font-size: 9px; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--faint);
+  }
+
+  /* ---- source note --------------------------------------------------- */
+  .source {
+    margin-top: 14px; padding-top: 9px; border-top: 1px solid var(--rule);
+    font-size: 11px; font-style: italic; color: #595959;
+    display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+  }
+
+  /* ---- trace table --------------------------------------------------- */
+  h2 {
+    font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin: 30px 0 9px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th {
+    text-align: left; font-weight: 600; font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted);
+    border-bottom: 1px solid var(--ink); padding: 0 10px 6px 0;
+  }
+  tbody td { padding: 5px 10px 5px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  tbody tr:hover { background: #F4F2EC; }
+  td.t { font-family: var(--mono); color: var(--muted); white-space: nowrap; width: 1%; }
+  td.who { white-space: nowrap; width: 1%; font-weight: 600; }
+  td.who .ref {
+    font-family: var(--mono); font-weight: 400; font-size: 10px;
+    color: var(--faint); margin-left: 8px;
+  }
+  td.st { white-space: nowrap; width: 1%; color: var(--muted); font-size: 11px; }
+  .roster td.detail { max-width: 40ch; }
+  td.tool { font-family: var(--mono); white-space: nowrap; width: 1%; }
+  td.detail { color: var(--muted); font-family: var(--mono); font-size: 11px;
+              overflow-wrap: anywhere; }
+  .empty { color: var(--faint); font-style: italic; padding: 14px 0; }
+
+  /* live commentary: what each agent said between tool calls */
+  .msg {
+    border-left: 2px solid var(--rule);
+    padding: 2px 0 2px 12px; margin-bottom: 11px;
+  }
+  .msg.live { border-left-color: var(--navy); }
+  .msg .who2 {
+    font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+    font-weight: 600; color: var(--ink);
+  }
+  .msg .t2 { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-left: 8px; }
+  .msg p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); max-width: 100ch; }
+  /* One agent addressing another. This is a conversation between two cards, so
+     the balloon floats between them rather than living inside either one. */
+  /* Balloons sit on the same grid as the cards, each one in its own speaker's
+     column. That is what makes the tail land on the right card without any
+     arithmetic: the balloon is already directly underneath it. */
+  .wires {
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 3), var(--card));
+    gap: 8px var(--gap);
+    /* bottom margin keeps the balloon clear of the next level's branch line */
+    margin: 14px 0 12px;
+  }
+  .wire {
+    position: relative; padding: 8px 13px; max-width: 100%;
+    background: var(--panel); border: 1px solid var(--navy); border-radius: 14px;
+    font-size: 11px; line-height: 1.45; color: var(--ink); font-style: italic;
+    box-shadow: 0 1px 0 rgba(11, 37, 69, .07);
+    cursor: pointer;
+  }
+  /* The clamp lives on the quote, not the balloon. Clamping the whole balloon
+     counted the sender label as one of the three lines, so the last line of
+     text was sliced through the middle instead of ending cleanly. */
+  .wire .said {
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .wire.open .said { display: block; }
+  .wire .more {
+    display: block; margin-top: 5px; font-style: normal;
+    font-family: var(--mono); font-size: 8.5px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--faint);
+  }
+  .wire:hover .more { color: var(--navy); }
+  /* A balloon is a moment, not a permanent fixture: it fades once it has been
+     on screen long enough to read. The Dialogue tab keeps every one of them. */
+  .wire { animation: wire-in .2s ease-out both; }
+  @keyframes wire-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: none; }
+  }
+  /* Tail points up at the card that actually spoke. --tail is set per balloon
+     from the speaker's position; a fixed offset pointed at empty space as soon
+     as the balloon was not directly under its own card. */
+  .wire::before, .wire::after {
+    content: ""; position: absolute; left: var(--tail, 22px);
+    border: 8px solid transparent;
+  }
+  .wire::before { top: -16px; border-bottom-color: var(--navy); margin-left: -8px; }
+  .wire::after  {
+    top: -14px; border-bottom-color: var(--panel);
+    border-width: 7px; margin-left: -7px;
+  }
+
+  /* No tail means the speaker is not the card directly above, so the balloon
+     leans on its label instead of a pointer that would name the wrong agent. */
+  .wire.no-tail::before, .wire.no-tail::after { display: none; }
+  .wire.no-tail { border-style: dashed; }
+
+  .wire b {
+    display: block; font-family: var(--mono); font-size: 9px; font-weight: 400;
+    letter-spacing: .08em; text-transform: uppercase;
+    color: var(--navy); margin-bottom: 3px; font-style: normal;
+  }
+  .wire .arw { color: var(--faint); margin: 0 3px; }
+
+  /* spawning reads as a different act from talking, so tint it */
+  .wire.spawn { border-color: #C9AC6B; background: #FCFAF4; }
+  .wire.spawn::before { border-bottom-color: #C9AC6B; }
+  .wire.spawn::after  { border-bottom-color: #FCFAF4; }
+  .wire.spawn b { color: #8A6A24; }
+
+  /* Run totals, as a strip above the tree so they survive a short panel. */
+  .ledger {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 26px;
+    padding: 10px 18px; border-bottom: 1px solid var(--rule);
+    background: var(--panel);
+  }
+  .ledger .cell { display: flex; flex-direction: column; gap: 1px; padding: 2px 0; }
+  .ledger .cell.lead { margin-right: 8px; padding-right: 22px; border-right: 1px solid var(--rule); }
+  .ledger .k {
+    font-family: var(--mono); font-size: 9px; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--faint);
+  }
+  .ledger .v { font-family: var(--mono); font-size: 13px; color: var(--ink); }
+  .ledger .v.big { font-size: 21px; color: var(--navy); letter-spacing: -.01em; }
+
+  /* Every other block on the card is labelled; this one was a bare italic line
+     with no clue what it was. */
+  .says .sk {
+    display: block; font-family: var(--mono); font-size: 8.5px;
+    letter-spacing: .09em; text-transform: uppercase; color: var(--faint);
+    font-style: normal; margin-bottom: 3px;
+  }
+  .says {
+    margin-top: 9px; padding-top: 8px; border-top: 1px dotted var(--rule);
+    font-size: 11.5px; color: var(--muted); font-style: italic;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .q { color: var(--faint); }
+
+  @media (max-width: 860px) {
+    body { padding: 22px 16px 40px; }
+    /* No grid override here. The column count and card width are solved in JS
+       against the real container width, so forcing 1fr at a breakpoint made
+       cards fill their tier and stop matching each other. */
+    .link { height: 26px; }
+  }
+
+  /* ---- panel mode ------------------------------------------------------
+     Docked at the bottom of an editor the viewport is wide and very short, so
+     a vertical cascade puts most of the tree out of reach. Below this height
+     the same tree flows left to right instead: one column per level, each
+     level's cards stacked, and the whole board scrolls sideways. */
+  @media (max-height: 620px) {
+    body { padding: 0 0 6px; }
+    .exhibit { padding: 10px 14px 12px; }
+    .bar { padding: 5px 14px; gap: 8px 12px; }
+    .ledger { padding: 7px 14px; gap: 0 20px; }
+    .ledger .v.big { font-size: 17px; }
+    /* A 340px panel cannot carry five rows of chrome and a tree. The strip
+       repeats the Log tab, so it goes; the roster stays because it is the one
+       readable summary, but capped so it never crowds out the diagram. */
+    .source { display: none !important; }
+    /* Rows are tighter here; sizeRoster() measures them and still shows three. */
+    .crew-wrap { max-height: 83px; margin-bottom: 8px; }
+    table.crew th { padding: 4px 8px 3px; }
+    table.crew td { padding: 3px 8px; }
+
+    #tiers {
+      display: flex; align-items: flex-start; gap: 0;
+      overflow-x: auto; padding-bottom: 4px;
+    }
+    /* One column per level here, so the tier's shared width has to collapse to
+       a single card. Left at the multi-column value it stretches the label,
+       connector and balloon row far past the cards they belong to. */
+    #tiers .tier { flex: 0 0 auto; width: auto; --w: var(--card); }
+    /* levels after the first are pushed off by an arrow gutter */
+    #tiers .tier + .tier { padding-left: 34px; }
+    #tiers .tier + .tier::before {
+      content: "\2192"; position: absolute; left: 9px; top: 30px;
+      color: var(--faint); font-size: 15px;
+    }
+    #tiers .tier { position: relative; }
+    /* one column of cards per level, and the vertical connector is meaningless
+       sideways, so the arrow gutter replaces it */
+    #tiers .agents { grid-template-columns: var(--card); gap: 10px; }
+    /* Cards stack into one column here, so the balloons have to follow or they
+       end up laid out against a grid that no longer exists. */
+    #tiers .wires { grid-template-columns: var(--card); gap: 8px; }
+    #tiers .wires .wire { grid-column: 1 !important; }
+    #tiers .link { display: none; }
+    .agents.speaking { padding-top: 0; }
+    .bubble { display: none; }          /* .says inside the card carries it */
+    .wires { margin: 10px 0 0; }
+    .wire { max-width: 300px; }
+
+    /* Two cards have to stack in a column barely taller than one, so the card
+       trades its long stat list for a 4-across ledger line. */
+    .node { padding: 8px 11px 9px; }
+    .node .stats { grid-template-columns: repeat(4, 1fr); gap: 0 8px; }
+    .node .stats .k {
+      grid-row: 1; font-family: var(--mono); font-size: 8.5px;
+      letter-spacing: .05em; text-transform: uppercase; color: var(--faint);
+      white-space: nowrap; overflow: hidden;
+    }
+    .node .stats .v { grid-row: 2; text-align: left; font-size: 11.5px; }
+    .node .says { margin-top: 6px; padding-top: 6px; -webkit-line-clamp: 2; }
+    .node .last { margin-top: 6px; padding-top: 6px; }
+    .node .meter { margin: 6px 0; }
+    .node .job { -webkit-line-clamp: 1; margin-top: 3px; }
+    .node .foot { margin-top: 5px; }  }
+</style>
+
+<div class="bar">
+  <label>Group
+    <select id="f-group">
+      <option value="session">by session</option>
+      <option value="project">by project</option>
+      <option value="flat">flat</option>
+    </select>
+  </label>
+  <!-- Which session, or which projects, depending on the Group mode. Filled
+       from /index.json, which walks ~/.claude/projects. -->
+  <label id="pick-session">Session
+    <select id="f-session"><option value="">this session (auto)</option></select>
+  </label>
+  <!-- Auto-follow jumps to whichever session wrote last, so with two running at
+       once the board changes under you. This nails it to what is showing. -->
+  <label class="chk" id="pick-lock"><input type="checkbox" id="f-lock"> lock session</label>
+  <label id="pick-project" hidden>Projects
+    <select id="f-projects" multiple size="3"></select>
+  </label>
+  <label>Depth
+    <select id="f-depth">
+      <option value="9">all levels</option>
+      <option value="1">lead + workers</option>
+      <option value="0">leads only</option>
+    </select>
+  </label>
+  <label>Model
+    <select id="f-model"><option value="">any</option></select>
+  </label>
+  <label>Project
+    <select id="f-project"><option value="">any</option></select>
+  </label>
+  <label class="chk"><input type="checkbox" id="f-live"> live only</label>
+  <label class="chk"><input type="checkbox" id="f-busy"> did real work
+    <span class="hint">&ge;5 tools</span></label>
+  <label class="chk"><input type="checkbox" id="f-orphan"> orphaned only</label>
+  <!-- Off by default: the board shows what you are working on, not everything
+       that ever ran. Agents from older turns are one click away. -->
+  <span class="count" id="f-count"></span>
+</div>
+
+<nav class="tabs" id="tabs">
+  <button class="tab on" data-view="tree">Agents</button>
+  <button class="tab" data-view="dialogue">Dialogue</button>
+  <button class="tab" data-view="log">Log</button>
+  <button class="tab" data-view="trace">Trace</button>
+  <span class="watching" id="watching"></span>
+  <span class="totals" id="tabtotals"></span>
+</nav>
+
+<section data-view="tree">
+  <div class="ledger" id="output"></div>
+  <!-- The board above the board: who exists, what each was sent to do, and the
+       last thing it actually did. Readable without decoding the diagram. -->
+  <div class="crew-wrap">
+    <table class="crew" id="crew">
+      <thead><tr>
+        <th>Agent</th><th>Status</th><th>Deployed</th><th>Model</th><th>Assignment</th>
+        <th>Last action</th><th class="num">Context</th><th class="num">Tools</th>
+      </tr></thead>
+      <tbody id="crew-body"></tbody>
+    </table>
+  </div>
+  <!-- Zoom, pinned to the viewport so it stays put however far you scroll.
+       The label reports the scale actually in use, including what "fit"
+       resolved to. #f-zoom stays the single source of truth. -->
+  <div class="zoomer" id="zoomer">
+    <button class="zbtn" data-z="out" title="Zoom out" aria-label="Zoom out">&minus;</button>
+    <button class="zlbl" data-z="fit" id="zoomlbl" title="Back to fit">fit</button>
+    <button class="zbtn" data-z="in" title="Zoom in" aria-label="Zoom in">+</button>
+  </div>
+  <!-- Options are generated from ZOOM_STEPS at startup. Maintained by hand they
+       drifted apart, and setting a value with no matching option silently
+       blanks a select rather than erroring. -->
+  <select id="f-zoom" hidden><option value="fit">fit</option></select>
+
+  <!-- An opened agent floats above the board instead of pushing it around, so
+       the tree you were reading stays exactly where you left it. -->
+  <div class="overlay" id="overlay" hidden></div>
+  <div class="exhibit">
+    <div id="tiers"></div>
+    <!-- Agents that ran but are no longer part of the current work. Same cards
+         as the tree, simply not wired into the hierarchy: they are finished,
+         so drawing branches to them would claim a relationship that is over. -->
+    <div class="parked" id="unassigned" hidden></div>
+    <div class="source">
+      <span id="src-left">Source: live transcript read, no API calls.</span>
+      <span id="src-right">awaiting data</span>
+    </div>
+  </div>
+</section>
+
+<section data-view="dialogue" hidden>
+  <div class="thread" id="dialogue"></div>
+</section>
+
+<section data-view="log" hidden>
+  <div id="chatter"></div>
+</section>
+
+<section data-view="roster" hidden>
+  <table class="roster">
+    <thead>
+      <tr><th>Agent</th><th>Status</th><th>Model</th><th>Doing</th><th>Now</th></tr>
+    </thead>
+    <tbody id="roster"></tbody>
+  </table>
+</section>
+
+<section data-view="trace" hidden>
+  <table>
+    <thead>
+      <tr><th>Time</th><th>Agent</th><th>Tool</th><th>Detail</th></tr>
+    </thead>
+    <tbody id="trace"></tbody>
+  </table>
+</section>
+
+<script>
+const ROLES = ["Universe", "Cost & capacity", "Regime (vintage)"];
+const fmt = n => (n ?? 0).toLocaleString("en-US");
+/** 57000 -> "57k". Context reads better against its window this way. */
+const short = n => {
+  n = n ?? 0;
+  if (n >= 1e6) return (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + "M";
+  if (n >= 1000) return Math.round(n / 1000) + "k";
+  return String(n);
+};
+const clock = iso => iso ? new Date(iso).toTimeString().slice(0, 8) : "--:--:--";
+
+// Transcript fields are agent-authored and can echo fetched web content, so
+// every interpolated value goes through this. Quotes included so the same
+// helper stays safe if a value is ever moved into an attribute.
+const esc = s => String(s ?? "").replace(/[<>&"']/g,
+  c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/**
+ * Write only when the markup actually changed. The board repaints every second,
+ * and blindly reassigning innerHTML restarts every CSS animation on it, so the
+ * speech bubbles never finished their fade and sat permanently half drawn. It
+ * also drops hover state and any text the user had selected.
+ */
+function setHTML(el, html) {
+  if (el._last === html) return false;
+  el._last = html;
+  el.innerHTML = html;
+  return true;
+}
+
+function nodeHTML(lane, role, open = false) {
+  if (!lane) {
+    return `<div class="node">
+      <div class="node-top"><span class="role"><i class="dot"></i>${esc(role)}</span>
+      <span class="badge">queued</span></div>
+      <div class="meter"><i style="width:0%"></i></div>
+      <div class="stats">
+        <span class="k">context</span><span class="v">0</span>
+        <span class="k">turns</span><span class="v">0</span>
+        <span class="k">tool calls</span><span class="v">0</span>
+        <span class="k">output</span><span class="v">0</span>
+      </div></div>`;
+  }
+  const live = lane.status === "live";
+  const last = lane.tools.length ? lane.tools[lane.tools.length - 1] : null;
+  // `open` is passed in, not inferred: the same lane is drawn collapsed in the
+  // tree and expanded in the overlay, and only the overlay copy is open.
+
+  // A live agent speaks in a bubble above its node; a finished one keeps its
+  // last words quietly inside the card so the board doesn't stay noisy.
+  const bubble = live && lane.saying && !open
+    ? `<div class="bubble"><span class="lbl">${esc(lane.name)}</span>${esc(plain(lane.saying))}</div>`
+    : "";
+
+  // Expanded: everything the agent said and did, newest first, scrollable.
+  const history = !open ? "" : `<div class="history">
+    <h4>Said</h4>
+    ${(lane.says || []).slice().reverse().map(x =>
+      `<div class="line"><b>${clock(x.at)}</b>${esc(plain(x.text))}</div>`).join("")
+      || `<div class="line">Nothing said yet.</div>`}
+    ${(lane.msgs || []).length ? `<h4>Messages</h4>` + lane.msgs.slice().reverse().map(m =>
+      `<div class="line"><b>${clock(m.at)} &middot; ${m.kind === "spawn" ? "spawned" : "sent to"} ${esc(m.to)}</b>${esc(plain(m.text))}</div>`).join("") : ""}
+    <h4>Tool calls (${lane.tool_count})</h4>
+    ${(lane.tools || []).slice().reverse().map(t =>
+      `<div class="line"><b>${clock(t.at)} &middot; ${esc(t.name)}</b>${esc(t.detail)}</div>`).join("")
+      || `<div class="line">No tool calls.</div>`}
+  </div>`;
+  return `<div class="node ${live ? "on" : "done"}${lane.orphaned ? " orphan" : ""}${open ? " expanded" : ""}"
+    data-id="${esc(lane.id)}" ${open ? "" : 'tabindex="0" role="button"'}
+    aria-label="${esc(lane.name)}, ${esc(lane.model)}, ${live ? "running" : "finished"}">
+    ${bubble}
+    ${open ? `<button class="back">&larr; back to all agents</button>` : ""}
+    <div class="node-top">
+      <span class="role"><i class="dot ${live ? "on" : "done"}"></i>${esc(lane.name)}${
+        lane.orphaned ? " &middot; orphaned" : ""}</span>
+      <!-- Model only. The effort suffix cost ~45px per card and truncated the
+           agent's own name, which matters more; it lives in the roster and the
+           tooltip instead. -->
+      <span class="badge" title="${esc(lane.model)}${
+        lane.effort ? " · " + esc(lane.effort) : ""}">${esc(modelLabel(lane.model))}</span>
+    </div>
+    ${lane.brief ? `<div class="job">${esc(jobOf(lane))}</div>` : ""}
+    <div class="meter ${fillClass(lane.context_pct)}"><i style="width:${
+      Math.min(100, lane.context_pct)}%"></i></div>
+    <div class="stats">
+      <span class="k">context</span><span class="v">${short(lane.context_now)} / ${short(lane.window)}</span>
+      <span class="k">turns</span><span class="v">${fmt(lane.turns)}</span>
+      <span class="k">tool calls</span><span class="v">${fmt(lane.tool_count)}</span>
+      <span class="k">output</span><span class="v">${fmt(lane.output_tokens)}</span>
+    </div>
+    ${lane.context_pct >= 80 ? `<div class="warn near">
+       ${Math.round(lane.context_pct)}% of the window used</div>` : ""}
+    ${open && (lane.compactions || []).length ? `<div class="warn compacted">
+       <b>compacted ${lane.compactions.length}&times;</b>
+       ${short(lane.dropped_tokens)} tokens dropped from this conversation
+       ${lane.compactions.map(c => `<span class="cline">${
+         c.micro ? "micro" : c.trigger || "auto"} &middot; ${short(c.pre)} &rarr; ${
+         short(c.post)}</span>`).join("")}</div>` : ""}
+    ${lane.saying && !bubble ? `<div class="says">
+       <span class="sk">${live ? "saying" : "last said"}</span>
+       ${esc(plain(lane.saying))}</div>` : ""}
+    ${last ? `<div class="last">
+       <span class="lk">last action</span>
+       <span class="lt">${esc(last.name)}</span>
+       <span class="ld">${esc(last.detail)}</span>
+       ${last.at ? `<span class="lz">${clock(last.at)}</span>` : ""}
+     </div>` : `<div class="last"><span class="lk">last action</span>
+       <span class="ld">no tool calls yet</span></div>`}
+    <!-- The two clocks tick every second. Baking them into the markup would
+         make the board differ on every poll, forcing a full rebuild; they are
+         filled in afterwards by touchClocks() instead. -->
+    <div class="foot">
+      <span class="c-run" data-for="${esc(lane.id)}"></span>
+      <span class="c-upd" data-for="${esc(lane.id)}"></span>
+    </div>
+    ${history}
+  </div>`;
+}
+
+/** "You are the BEAR agent. Find evidence" -> "Find evidence". The card already
+    says who it is, so the line under the name should say what it was sent to do. */
+function jobOf(lane) {
+  // Briefs are prompts, and prompts are written in Markdown too.
+  const t = plain(lane.brief);
+  if (!t) return "";
+  // Only drop the "You are the X agent." opener when it actually ends — the
+  // sentence terminator is what proves the rest is the assignment. Without it,
+  // "You are the ORCHESTRATOR of a small swarm" would be cut to "of a small
+  // swarm", which says nothing.
+  const done = t.replace(
+    /^you are (?:the|a|an)\s+\S+(?:\s+\S+){0,3}?\s*(?:agent|researcher|analyst|coordinator|lead)\s*[.:;]\s*/i, "");
+  const body = done !== t ? done : t.replace(/^you are (?:the|a|an)\s+/i, "");
+
+  // Real prompts open with scope boilerplate — working directory, "do not
+  // modify", tool restrictions. That is housekeeping, not the assignment, so
+  // walk forward to the first sentence that actually says what to do.
+  const boilerplate =
+    /^(work(ing)? (only )?(inside|in|from)\b|do not\b|don't\b|use [\w, ]+ only\b|stay\b|keep it short\b|return\b|you have\b)/i;
+  const hasPath = /(^|\s)([a-z]:\\|\/(usr|home|users)\/)/i;
+  const parts = body.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+  const real = parts.find(s => !boilerplate.test(s) && !hasPath.test(s));
+  return (real || parts[0] || body).slice(0, 110);
+}
+
+/**
+ * Reserve exactly as much headroom as the bubbles actually need. They are
+ * absolutely positioned, so they claim no space; a fixed padding guess works
+ * until an agent says something long enough to grow the bubble, which then
+ * punches up through the level label above it.
+ */
+function spaceBubbles(root) {
+  for (const grid of root.querySelectorAll(".agents.speaking")) {
+    let tallest = 0;
+    for (const bub of grid.querySelectorAll(".bubble")) {
+      tallest = Math.max(tallest, bub.getBoundingClientRect().height);
+    }
+    // 16 left the tallest bubble grazing the level label above it by a pixel
+    // or two; the extra is cheap and the collision is not.
+    const clear = tallest ? Math.ceil(tallest) + 22 : 0;
+    grid.style.paddingTop = clear + "px";
+    grid.style.rowGap = clear ? (clear + 10) + "px" : "";
+  }
+}
+
+/**
+ * Point each balloon's tail at the card that spoke. The balloon already shares
+ * its speaker's grid column, so this only has to correct for the two being
+ * different widths, and it clamps so the tail never slides off the balloon.
+ */
+function aimTails(root) {
+  for (const w of root.querySelectorAll(".wire[data-for]")) {
+    const card = root.querySelector(`.node[data-id="${CSS.escape(w.dataset.for)}"]`);
+    if (!card) continue;
+    const r = w.getBoundingClientRect(), c = card.getBoundingClientRect();
+    if (!r.width || !c.width) continue;
+
+    // The balloon row sits under the whole card grid. If that grid wrapped,
+    // the speaker can be a row or more above, and the card immediately over
+    // the balloon belongs to somebody else. Pointing at it would name the
+    // wrong agent, so the tail is dropped and the label carries the meaning.
+    const adjacent = r.top - c.bottom >= -2 && r.top - c.bottom < 46;
+    w.classList.toggle("no-tail", !adjacent);
+    if (!adjacent) continue;
+
+    const pad = 14;
+    const x = (c.left + c.width / 2) - r.left;
+    w.style.setProperty("--tail",
+      Math.max(pad, Math.min(r.width - pad, x)).toFixed(1) + "px");
+  }
+}
+
+/**
+ * Report the scale actually in use. In "fit" mode the chosen value is a result,
+ * not a setting, so saying only "fit" hides the one number you want.
+ */
+function showZoom(zoom) {
+  const pct = Math.round(zoom * 100) + "%";
+  const auto = F("f-zoom").value === "fit";
+  F("zoomlbl").textContent = auto ? `fit · ${pct}` : pct;
+  const i = ZOOM_STEPS.indexOf(zoom);
+  document.querySelector('.zoomer [data-z="in"]').disabled = zoom >= ZOOM_STEPS[0];
+  document.querySelector('.zoomer [data-z="out"]').disabled =
+    i === ZOOM_STEPS.length - 1;
+}
+
+/** Step the zoom one notch from whatever is on screen right now. */
+function stepZoom(dir) {
+  const sel = F("f-zoom");
+  const current = parseFloat(F("zoomlbl").textContent.replace(/.*?(\d+)%/, "$1")) / 100;
+  // Nearest defined step to what is showing, so leaving "fit" does not jump.
+  let i = 0, best = Infinity;
+  ZOOM_STEPS.forEach((z, n) => {
+    const d = Math.abs(z - current);
+    if (d < best) { best = d; i = n; }
+  });
+  const next = ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, i + dir))];
+  sel.value = String(next);
+  if (last) paint(last);
+}
+
+/**
+ * Agents narrate in Markdown, and a finished one's last words are usually its
+ * whole report. Rendered raw that becomes "## Report **CONFIRMED** | Selector |
+ * ---" in a card two lines tall, which reads as corruption. Strip the syntax
+ * and keep the prose.
+ */
+function plain(text) {
+  const raw = String(text || "");
+  if (!raw) return "";
+  const s = raw
+    // The server collapses newlines before this runs, so nothing may depend on
+    // line anchors: they would only ever bind at the very start of the string.
+    .replace(/```+[a-z]*/gi, " ")               // fence markers, keep the code
+    .replace(/(^|\s)#{1,6}\s+/g, "$1")          // heading marks, anywhere
+    .replace(/\*\*([^*]+)\*\*/g, "$1")          // bold
+    .replace(/__([^_]+)__/g, "$1")              // bold, alt syntax
+    .replace(/`([^`]*)`/g, "$1")                // inline code
+    .replace(/\[([^\]]+)\]\([^)\s]*\)/g, "$1")  // links, keep the label
+    .replace(/\|?\s*:?-{3,}:?\s*(?=\||$)/g, " ")  // table separator row
+    .replace(/\s*\|\s*/g, " · ")           // cells: separate, never delete
+    .replace(/(?:\s*·\s*){2,}/g, " · ")         // empty cells leave runs of them
+    .replace(/^\s*[-*+]\s+/, "")                // a leading bullet only
+    .replace(/^\s*>\s?/, "")                    // a leading quote mark only
+    // The server truncates at 220 chars, which regularly lands mid `code span`
+    // or mid **bold** and leaves an opening marker with no partner, which the
+    // pair rules above cannot reach. No prose contains a bare ** or a run of
+    // three hyphens, so removing what is left over is safe.
+    .replace(/`/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/(^|\s)[-—]{3,}(?=\s|$)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  // Single asterisks are left alone on purpose: collapsed to one line, "2 * 3"
+  // and "*.jsonl" are indistinguishable from italics, and eating them corrupts
+  // arithmetic and globs. Same for mid-string bullets.
+  //
+  // And never hand back an empty string for non-empty input — a blank card with
+  // a name on it reads as a bug, which is exactly what the table rule used to
+  // produce for any report that was mostly a table.
+  return s || raw.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Readable status. The server sends the fine-grained reading; "orphaned" wins
+ * over everything because a worker still running under a parent that already
+ * quit is the one state you have to act on.
+ */
+function stateOf(lane) {
+  if (lane.orphaned) return "orphaned";
+  return lane.state || (lane.status === "live" ? "active" : "done");
+}
+
+/** Colour band for the context meter. Amber from 80%, wine from 95%. */
+function fillClass(pct) {
+  if (pct >= 95) return "full";
+  if (pct >= 80) return "hot";
+  return "";
+}
+
+/** Time left on the prompt cache, in words.
+ *
+ *  Cache reads bill at a tenth of fresh input, so the first call after this
+ *  runs out costs about ten times the one before it. Worth knowing before you
+ *  walk away from a session rather than after. */
+function cacheLeft(lane) {
+  const s = lane.cache_expires_in_s;
+  if (s === null || s === undefined) return null;
+  if (s <= 0) return "cache expired";
+  if (s < 60) return `cache ${s}s`;
+  return `cache ${Math.floor(s / 60)}m`;
+}
+
+/** When the agent was deployed. Today shows a clock, older shows a date. */
+function deployedAt(lane) {
+  if (!lane.started) return "—";
+  const t = new Date(lane.started);
+  if (!Number.isFinite(t.getTime())) return "—";
+  const sameDay = t.toDateString() === new Date().toDateString();
+  return sameDay
+    ? t.toTimeString().slice(0, 5)
+    : t.toLocaleDateString(undefined, { day: "2-digit", month: "short" }) +
+      " " + t.toTimeString().slice(0, 5);
+}
+
+/** Cap the roster at ROSTER_ROWS real rows, then scroll.
+ *
+ *  A CSS `calc(rows * <height>)` needs a row height that is known up front, and
+ *  there isn't one: a long assignment wraps its cell and the row grows from 27px
+ *  to 46px, so the same rule showed three rows on one session and one on the
+ *  next. Measuring the rows that actually rendered is the only version that
+ *  holds for every agent name the transcripts throw at it. */
+const ROSTER_ROWS = 3;
+
+function sizeRoster() {
+  const wrap = document.querySelector(".crew-wrap");
+  if (!wrap) return;
+  const rows = wrap.querySelectorAll("#crew-body tr");
+  if (!rows.length) { wrap.style.maxHeight = ""; return; }
+  const head = wrap.querySelector("thead");
+  // The header is sticky, so it overlays the first row rather than pushing it
+  // down; its height has to be added on top or the last row is half-cut.
+  let h = head ? head.getBoundingClientRect().height : 0;
+  for (let i = 0; i < Math.min(ROSTER_ROWS, rows.length); i++) {
+    h += rows[i].getBoundingClientRect().height;
+  }
+  // box-sizing is border-box, so max-height covers the border as well. Without
+  // this the box is two pixels short of its own contents and scrolls a hair
+  // even when everything already fits.
+  h += wrap.offsetHeight - wrap.clientHeight;
+  wrap.style.maxHeight = Math.ceil(h) + "px";
+}
+
+/** Fill the per-card clocks in place, without touching the surrounding markup. */
+function touchClocks(lanes) {
+  const by = new Map(lanes.map(l => [l.id, l]));
+  for (const el of document.querySelectorAll(".c-run")) {
+    const l = by.get(el.dataset.for);
+    if (l) el.textContent = `${l.status === "live" ? "running" : "finished"} · ${mins(l.elapsed_s)}`;
+  }
+  for (const el of document.querySelectorAll(".c-upd")) {
+    const l = by.get(el.dataset.for);
+    if (l) el.textContent =
+      `${l.spawns ? l.spawns + " spawned · " : ""}updated ${mins(l.updated_s_ago)} ago`;
+  }
+}
+
+/** "claude-haiku-4-5-20251001" -> "haiku 4.5". The vendor prefix and the build
+    date are the same on every card, so they cost width and say nothing. The
+    full id stays on the title attribute. */
+function modelLabel(m) {
+  let t = String(m || "").replace(/^claude-/, "").replace(/-\d{8}$/, "");
+  const parts = t.split("-");
+  const family = parts.shift() || t;
+  const ver = parts.join(".");
+  return ver ? `${family} ${ver}` : family;
+}
+
+/** 245 -> "4m", 9 -> "9s". Cards have no room for a full duration. */
+function mins(s) {
+  s = Math.max(0, Math.round(s || 0));
+  if (s < 60) return s + "s";
+  if (s < 3600) return Math.round(s / 60) + "m";
+  return (s / 3600).toFixed(1) + "h";
+}
+
+const F = id => document.getElementById(id);
+const filters = () => ({
+  group: F("f-group").value,
+  depth: +F("f-depth").value,
+  model: F("f-model").value,
+  project: F("f-project").value,
+  live: F("f-live").checked,
+  busy: F("f-busy").checked,
+  orphan: F("f-orphan").checked,
+});
+
+/** Keep the model and project dropdowns in sync with what's actually there. */
+function syncOptions(lanes) {
+  for (const [id, key] of [["f-model", "model"], ["f-project", "project"]]) {
+    const el = F(id);
+    const seen = [...new Set(lanes.map(l => l[key]).filter(Boolean))].sort();
+    const current = el.value;
+    if (el.dataset.seen === seen.join("|")) continue;
+    el.dataset.seen = seen.join("|");
+    el.innerHTML = `<option value="">any</option>` +
+      seen.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+    el.value = seen.includes(current) ? current : "";
+  }
+}
+
+/**
+ * Card width is shared by every card on the board, so it is solved once from
+ * the widest level and the space actually available. Cards stay identical to
+ * each other at any window size; the size itself follows the window, which is
+ * what keeps the whole tree on screen when you drag the panel narrower.
+ */
+/**
+ * Usable width inside an element. clientWidth counts padding, and the board is
+ * laid out in the content box, so using clientWidth overstates the room by the
+ * padding and the grid ends up wider than the tier holding it.
+ */
+function contentWidth(el) {
+  if (!el) return 0;
+  const cs = getComputedStyle(el);
+  const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+  // No floor and no fallback guess. A floor of 240 made the board wider than
+  // its frame on a narrow window — the card actually GREW as the container
+  // shrank — and a guess of 900 for a hidden tab laid the board out for room
+  // that does not exist. Zero is the honest answer; the caller skips instead.
+  return Math.max(0, (el.clientWidth || 0) - pad - 2);
+}
+
+// Three cards to a row, and the fourth wraps underneath. A hard cap keeps the
+// board the same shape on every screen, which a purely width-driven column
+// count never does.
+const COLS_MAX = 3;
+
+// The scales the +/- buttons step through, largest first. Written out rather
+// than generated so no floating-point drift creeps into the values that end up
+// in a CSS transform.
+const ZOOM_STEPS = [1, 0.9, 0.85, 0.8, 0.7, 0.6, 0.5];
+
+function fitCards(container, widest, zoom) {
+  const GAP = 16, MAX = 300;
+  // Dividing by the zoom gives the room the board has in its own coordinates:
+  // scaling down is what buys space, so cards keep their full width instead of
+  // being squeezed.
+  const avail = contentWidth(container) / zoom;
+  // Never demand a minimum wider than the space that exists, or the board ends
+  // up wider than its frame on a narrow window.
+  const min = Math.min(190, avail);
+  let cols = Math.max(1, Math.min(widest, COLS_MAX,
+                                  Math.floor((avail + GAP) / (min + GAP))));
+  // Even the rows out. Nine agents in a 3-wide box reads as 3+3+3, not as two
+  // full rows and a straggler.
+  const rows = Math.ceil(widest / cols);
+  cols = Math.max(1, Math.min(cols, Math.ceil(widest / rows)));
+  const card = Math.max(1, Math.min(MAX, Math.floor((avail - (cols - 1) * GAP) / cols)));
+  return { card, gap: GAP, maxCols: cols };
+}
+
+/**
+ * How much to scale the board. "fit" shrinks it just enough that the widest
+ * level can hold full-size cards, which is the difference between reading a
+ * small board and squinting at a compressed one. Floored so it never becomes
+ * unreadable in the other direction.
+ */
+function boardZoom(container, widest) {
+  const chosen = F("f-zoom").value;
+  if (chosen !== "fit") {
+    // A NaN here would reach --card and collapse every tier to one column.
+    const z = parseFloat(chosen);
+    return Number.isFinite(z) && z > 0 ? z : 1;
+  }
+  // Earlier this solved for the whole level on ONE row, so nine agents asked
+  // for 2800px and the board shrank to 55% even though it was free to wrap.
+  // Wrapping is the cheaper way to make room, so scale down only until cards
+  // come out comfortably wide, and let the grid handle the rest.
+  //
+  // FIT_MAX holds it a notch below full size even when there is room to spare:
+  // a board that just fits leaves nothing around it, and the extra margin is
+  // what makes a wide tree readable rather than wall-to-wall.
+  const COMFORTABLE = 260, FIT_MAX = 0.85;
+  for (const z of ZOOM_STEPS) {
+    if (z <= FIT_MAX && fitCards(container, widest, z).card >= COMFORTABLE) return z;
+  }
+  return ZOOM_STEPS[ZOOM_STEPS.length - 1];
+}
+
+/** Split the board according to the Group control. */
+function groupLanes(lanes, mode) {
+  const widest = ls => {
+    const byD = new Map();
+    for (const l of ls) byD.set(l.depth, (byD.get(l.depth) || 0) + 1);
+    return Math.max(1, ...byD.values());
+  };
+  if (mode === "project") {
+    const by = new Map();
+    for (const l of lanes) {
+      const k = l.project || "unattributed";
+      if (!by.has(k)) by.set(k, []);
+      by.get(k).push(l);
+    }
+    return [...by.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([title, ls]) => ({ title, lanes: ls, widest: widest(ls) }));
+  }
+  if (mode === "flat") {
+    // One rank, no hierarchy: every agent side by side.
+    return [{ title: "", lanes: lanes.map(l => ({ ...l, depth: 0 })),
+              widest: lanes.length || 1 }];
+  }
+  return [{ title: "", lanes, widest: widest(lanes) }];
+}
+
+/** One band per depth level, with the branch lines that connect them. */
+function renderTiers(lanes, fit, now) {
+  const byDepth = new Map();
+  for (const l of lanes) {
+    if (!byDepth.has(l.depth)) byDepth.set(l.depth, []);
+    byDepth.get(l.depth).push(l);
+  }
+  const depths = [...byDepth.keys()].sort((a, b) => a - b);
+
+  // The SVG is stretched over the card grid, so a drop has to land on the real
+  // column centre. Dividing the span evenly by card count ignores the gaps and
+  // misses every card by a few pixels.
+  const linkSvg = (count, cols, live) => {
+    if (!count || !cols) return "";
+    const { card, gap } = fit;
+    const total = cols * card + (cols - 1) * gap;
+    const centre = i => (((i * (card + gap) + card / 2) / total) * 100).toFixed(3);
+    // When a level wraps, only the first row sits directly under the trunk, so
+    // only those cards get a drop. Drawing one per card would point the lines
+    // at positions no card occupies.
+    const n = Math.min(count, cols);
+    const paths = Array.from({ length: n }, (_, i) =>
+      `<path class="${live ? "flow" : "on"}" d="M50 0 V8 H${centre(i)} V22"></path>`
+    ).join("");
+    return `<svg class="link" viewBox="0 0 100 22" preserveAspectRatio="none"
+             aria-hidden="true">${paths}</svg>`;
+  };
+
+  return depths.map((d, idx) => {
+    const row = byDepth.get(d);
+    const cols = Math.min(row.length, fit.maxCols);
+    const anyRowLive = row.some(l => l.status === "live");
+    // Every level gets a label, including the root — without one the first
+    // column's cards sit higher than the rest and the row looks broken.
+    const label = `<div class="tier-label">${d === 0 ? "session" : "level " + d}` +
+      ` &middot; ${row.length} agent${row.length === 1 ? "" : "s"}</div>`;
+    const connector = idx === 0 ? "" : linkSvg(row.length, cols, anyRowLive);
+    const speaking = row.some(l => l.status === "live" && l.saying) ? " speaking" : "";
+
+    // Agent-to-agent traffic is a conversation between cards, so it is drawn
+    // between them as comic balloons rather than stuffed inside a card. The
+    // tail is aimed at the speaker's own column, so a balloon under a wide row
+    // still visibly comes from the right card.
+    // Drawn whether or not a card is open: the open one floats above the board
+    // now, so the board underneath must not rearrange itself.
+    // Only messages recent enough to still be worth showing. A balloon that
+    // never goes away turns the board into a wall of old quotes; the Dialogue
+    // tab is where the full history lives.
+    const wires = row.flatMap((l, li) =>
+      (l.msgs || []).slice(-1).filter(m => freshMsg(m, now)).map(m => {
+        const body = plain(m.text);
+        return `
+        <div class="wire ${m.kind === "spawn" ? "spawn" : "send"}" style="grid-column:${(li % cols) + 1}"
+             data-for="${esc(l.id)}" data-wire="${esc(l.id)}:${esc(m.at || "")}">
+          <b>${esc(l.name)} <span class="arw">&rarr;</span> ${esc(m.to) || "?"}</b>
+          <span class="said">&ldquo;${esc(body)}&rdquo;</span>
+          <span class="more" hidden>click to read it all</span>
+        </div>`;
+      })).join("");
+
+    // Connector and grid live in the same box so the lines land on the cards.
+    return `<div class="tier" style="--cols:${cols}">
+      ${connector}${label}
+      <div class="agents${speaking}">
+        ${row.map(l => nodeHTML(l, l.name)).join("")}
+      </div>
+      ${wires ? `<div class="wires">${wires}</div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+// How many of your messages ago an agent can have started and still count as
+// part of what you are doing. Three keeps a card from vanishing the instant you
+// type the next thing, without letting the board accumulate a whole session.
+const WAVES_KEPT = 3;
+
+// How long a speech balloon stays on the board after the message was sent.
+// Long enough to notice and read, short enough that the tree does not silt up.
+const WIRE_LIFE_S = 45;
+
+/** Balloons expire; the Dialogue tab keeps everything. */
+function freshMsg(m, generatedAt) {
+  if (!m || !m.at) return false;
+  const now = generatedAt ? Date.parse(generatedAt) : Date.now();
+  const age = (now - Date.parse(m.at)) / 1000;
+  return Number.isFinite(age) && age >= -5 && age < WIRE_LIFE_S;
+}
+
+/** Which balloons the reader has opened, kept across repaints. */
+const openWires = new Set();
+
+// An agent untouched for longer than this is history no matter where it sits
+// in the delegation order. It leaves the tree but stays on the board.
+const CURRENT_MAX_AGE_S = 2 * 3600;
+
+/** Still part of the work in front of you, rather than the session's history.
+ *
+ * Both tests have to pass. Rounds alone are relative to the session's own
+ * past, so a session that last delegated a month ago still had a "most recent
+ * three rounds" and put month-old agents on the board. Age alone is no good
+ * either: it was what made an old session show a lone orchestrator with its
+ * fifteen agents missing entirely.
+ */
+function isCurrent(l) {
+  if (l.is_root || l.status === "live" || l.orphaned) return true;
+  return (l.wave ?? 0) < WAVES_KEPT
+      && (l.updated_s_ago ?? 0) < CURRENT_MAX_AGE_S;
+}
+
+function applyFilters(lanes, f) {
+  return lanes.filter(l =>
+    (f.depth >= 9 || l.depth <= f.depth) &&
+    (!f.model || l.model === f.model) &&
+    (!f.project || l.project === f.project) &&
+    (!f.live || l.status === "live") &&
+    (!f.busy || l.tool_count >= 5) &&
+    (!f.orphan || l.orphaned)
+  );
+}
+
+function paint(s) {
+  syncOptions(s.lanes);
+  const f = filters();
+  const passing = applyFilters(s.lanes, f);
+  // The tree holds only what is current. Finished agents are drawn below it.
+  const shown = passing.filter(isCurrent);
+  // Agents that ran but have dropped out of the current work. They are not
+  // hidden: they move below the tree, in the same cards, simply unattached —
+  // which is what they are, since a finished agent has no live relationship
+  // to anything.
+  const parked = passing.filter(l => !l.is_root && !isCurrent(l));
+  // Count against what is on disk, never against what survived the read cap.
+  // Measuring the total after the truncation is how a board showing 15 of 36
+  // agents came to describe itself as "16 of 16".
+  const drawn = shown.length + parked.length;
+  const onDisk = (s.agents_on_disk || 0) + 1;      // + the session itself
+  F("f-count").textContent = `${drawn} of ${Math.max(onDisk, s.lanes.length)} agents`;
+
+  // Split the true hierarchy: the interactive session that started everything
+  // sits above; everything it spawned sits below.
+  const root = shown.find(l => l.is_root) || null;
+  const lanes = shown.filter(l => l !== root);
+  const anyLive = s.totals.live > 0;
+
+  // Crew chips: every agent, always visible, click to jump into one.
+  // (sizeRoster below caps the box at three real rows; see its note.)
+  // The list holds every agent, tree and unassigned alike — it is the one
+  // place that answers "what exists". Session first, then most recently
+  // deployed, so the newest work is always near the top.
+  const roster = [...shown, ...parked].sort((a, b) => {
+    if (a.is_root !== b.is_root) return a.is_root ? -1 : 1;
+    return String(b.started || "").localeCompare(String(a.started || ""));
+  });
+  setHTML(document.getElementById("crew-body"), roster.map(l => {
+    const t = l.tools.length ? l.tools[l.tools.length - 1] : null;
+    return `<tr class="${l.status === "live" ? "live" : "done"}${
+        l.orphaned ? " orphan" : ""}${inspecting === l.id ? " on" : ""}"
+        data-id="${esc(l.id)}" tabindex="0" role="button">
+      <td class="nm"><i class="dot ${l.status === "live" ? "on" : "done"}"></i>${esc(l.name)}
+        <span class="lvl">L${l.depth}</span></td>
+      <td><span class="state ${esc(stateOf(l))}">${esc(stateOf(l))}</span></td>
+      <td class="mono sm when" title="${esc(l.started || "")}">${esc(deployedAt(l))}</td>
+      <td class="mono sm mdl">${esc(modelLabel(l.model))}${
+        l.effort ? ` <span class="lvl">${esc(l.effort)}</span>` : ""}</td>
+      <td class="doing">${esc(jobOf(l)) ||
+        (l.is_root ? "<i>interactive session</i>" : "&mdash;")}</td>
+      <td class="mono sm act">${t ? `<b>${esc(t.name)}</b> ${esc(t.detail)}` : "&mdash;"}</td>
+      <td class="mono num">${short(l.context_now)}</td>
+      <td class="mono num">${fmt(l.tool_count)}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="8" class="doing">No agents in view.</td></tr>`);
+  sizeRoster();
+
+  // Render one band per depth: root on top, then whatever it spawned, then
+  // whatever those spawned. Children end up beneath their own parent.
+  const tiersEl = document.getElementById("tiers");
+  const grouped = groupLanes(shown, f.group);
+  const widest = Math.max(1, ...grouped.map(g => g.widest));
+  // Measure the unscaled parent. #tiers has its own width set from the last
+  // zoom, so measuring it would feed the result back into itself and the
+  // scale would oscillate between paints.
+  const room = tiersEl.parentElement || tiersEl;
+  // On another tab the exhibit is display:none and measures zero. Laying the
+  // board out against a guessed width builds it for room that does not exist,
+  // and it is still on screen for a moment when you come back. Leave the last
+  // good layout alone; the resize observer repaints when it is visible again.
+  if (contentWidth(room) <= 0) return;
+  const zoom = boardZoom(room, widest);
+  const fit = fitCards(room, widest, zoom);
+  tiersEl.style.setProperty("--card", fit.card + "px");
+  tiersEl.style.setProperty("--gap", fit.gap + "px");
+  // The unassigned block sits outside #tiers, so it needs the same card width
+  // AND the same scale. Matching only the width drew its cards at 300px beside
+  // tree cards at 255, because the tree is the thing being scaled.
+  document.documentElement.style.setProperty("--card", fit.card + "px");
+  document.documentElement.style.setProperty("--gap", fit.gap + "px");
+  // Scale the board rather than the cards. The wrapper reclaims the vertical
+  // space the transform leaves behind, which a transform alone does not.
+  tiersEl.style.transform = zoom < 0.999 ? `scale(${zoom.toFixed(3)})` : "";
+  tiersEl.style.width = zoom < 0.999 ? (100 / zoom).toFixed(3) + "%" : "";
+  showZoom(zoom);
+
+  setHTML(tiersEl, grouped.map(g =>
+    (g.title ? `<div class="group-h">${esc(g.title)}</div>` : "") +
+    renderTiers(g.lanes, fit, s.generated_at)).join(""));
+
+  // The opened agent is drawn once more, on top, leaving the board untouched.
+  // Look through the parked agents as well as the deployed ones. Searching
+  // only the tree meant clicking anything under "not assigned" set the state,
+  // repainted, found nothing to open, and looked for all the world like a
+  // dead card. Same for its roster row, which goes through this same lookup.
+  const openLane = inspecting
+    ? ([...shown, ...parked].find(l => l.id === inspecting) || null)
+    : null;
+  const ov = document.getElementById("overlay");
+  ov.hidden = !openLane;
+  setHTML(ov, openLane ? nodeHTML(openLane, openLane.name, true) : "");
+  // Stop the board scrolling away behind the open card.
+  document.body.style.overflow = openLane ? "hidden" : "";
+
+  touchClocks(shown);
+  // setHTML rebuilds the balloons, so anything the reader had opened has to be
+  // reopened or it would snap shut under them on the next poll.
+  for (const w of tiersEl.querySelectorAll(".wire[data-wire]")) {
+    const open = openWires.has(w.dataset.wire);
+    w.classList.toggle("open", open);
+    const said = w.querySelector(".said"), more = w.querySelector(".more");
+    if (!said || !more) continue;
+    // Offer to expand only when something is genuinely hidden. Guessing from
+    // character count promised more text and then delivered the same text,
+    // because the server had already trimmed it to fit.
+    const clipped = open || said.scrollHeight > said.clientHeight + 1;
+    more.hidden = !clipped;
+    more.textContent = open ? "click to shorten" : "click to read it all";
+  }
+  spaceBubbles(tiersEl);
+  aimTails(tiersEl);
+
+  // Run totals sit above the tree, not below it — in a short panel anything
+  // under the cascade is unreachable.
+  // Two of these used to lie. "of which written" implied output was a subset
+  // of the context figure, but output is cumulative across every turn while
+  // the context figure is a snapshot — so "of which" was routinely larger than
+  // the thing it claimed to be part of. And "context re-read" named only the
+  // cache-read share of a number that also counts fresh input and output.
+  const cell = (k, v, why) =>
+    `<div class="cell" title="${esc(why)}"><span class="k">${k}</span>` +
+    `<span class="v">${v}</span></div>`;
+  document.getElementById("output").innerHTML =
+    `<div class="cell lead" title="Sum of every agent's context as it stands now. A snapshot of the working set, not a running total.">
+       <span class="k">context in play now</span>
+       <span class="v big">${fmt(s.totals.context_sum)}</span>
+     </div>`
+    + cell("written, all turns", fmt(s.totals.output_tokens),
+           "Everything the agents have produced across the whole run. Cumulative, so it can exceed the context in play.")
+    + cell("biggest single call", fmt(s.totals.context_peak),
+           "The largest context any one call carried, over the whole run. A session that filled its window and compacted reads small now; this still shows the peak.")
+    + cell("tool calls", fmt(s.totals.tool_count), "Tool calls across all agents.")
+    + cell("agents spawned", fmt(s.totals.spawns),
+           "Agents created over the run, counted from the spawn records in the transcripts.")
+    + cell("tokens billed, all turns", fmt(s.totals.billed_tokens),
+           "Every token sent to or produced by the model, summed over every turn. Dominated by re-reading context, which bills at a tenth of fresh input. This is the number that tracks usage, not the context in play.");
+
+  // Which run is on screen. Auto-follow can move between projects on its own,
+  // so leaving this to a dropdown label meant watching the wrong session
+  // without noticing.
+  const rootLane = s.lanes.find(l => l.is_root);
+  const where = rootLane && rootLane.project ? rootLane.project : "unknown project";
+  const pinned = F("f-session").value ? "pinned" : "auto";
+  // Auto-follow can only show one session, and the one writing most often wins.
+  // Without this you sit watching the wrong run wondering why it never updates.
+  const nowMs = Date.now();
+  const others = INDEX.projects.flatMap(p => p.sessions)
+    .filter(x => x.id !== (rootLane && rootLane.id)
+              && nowMs - x.updated * 1000 < 10 * 60 * 1000).length;
+  // Which window this session belongs to. Two open at once are otherwise
+  // indistinguishable, and auto-follow moves between them on its own.
+  const SOURCE = { "claude-vscode": "vs code", "claude-desktop": "desktop",
+                   "cli": "terminal", "sdk": "sdk" };
+  const src = rootLane && rootLane.entrypoint
+    ? (SOURCE[rootLane.entrypoint] || rootLane.entrypoint) : "";
+  const cache = rootLane ? cacheLeft(rootLane) : null;
+  F("watching").innerHTML =
+    `<span class="wk">watching</span> ${esc(where)} ` +
+    `<span class="wq">(${pinned})</span>` +
+    (src ? ` <span class="wsrc">${esc(src)}</span>` : "") +
+    (cache ? ` <span class="wcache${
+      (rootLane.cache_expires_in_s <= 0) ? " cold" : ""}">${esc(cache)}</span>` : "") +
+    (others ? ` <span class="wo">${others} other session${
+      others === 1 ? "" : "s"} active</span>` : "");
+
+  // Unassigned agents: same cards as the tree, no branches, below it.
+  const parkEl = F("unassigned");
+  parkEl.hidden = !parked.length;
+  parkEl.style.transformOrigin = "top left";
+  parkEl.style.transform = zoom < 0.999 ? `scale(${zoom.toFixed(3)})` : "";
+  parkEl.style.width = zoom < 0.999 ? (100 / zoom).toFixed(3) + "%" : "";
+  setHTML(parkEl,
+    `<div class="bh">not assigned &middot; ${parked.length} agent${
+      parked.length === 1 ? "" : "s"} not currently deployed</div>` +
+    `<div class="slots">${parked.map(l => nodeHTML(l, l.name)).join("")}</div>`);
+  touchClocks(parked);
+
+  document.getElementById("src-left").textContent =
+    "Source: live transcript read, no API calls. " +
+    "Context in play is a snapshot; written and billed are running totals over the whole session.";
+  document.getElementById("src-right").textContent =
+    `${anyLive ? "Live" : "Idle"} · updated ${clock(s.generated_at)}`;
+
+  document.getElementById("tabtotals").textContent =
+    `${short(s.totals.context_sum)} in context · ${short(s.totals.output_tokens)} written · `
+    + `${short(s.totals.billed_tokens)} billed · ${s.totals.tool_count} tools`;
+
+  // Dialogue: agent to agent, oldest first, indented by who is speaking so a
+  // delegation reads as a conversation instead of a log.
+  // Sides follow direction, not speaker. Alternating per speaker put every
+  // turn on the left whenever one agent did all the talking, which is exactly
+  // the case a delegation produces. Work going down the tree sits left, answers
+  // coming back sit right, so a request and its reply face each other.
+  const VERB = { spawn: "&rarr; spawned", reply: "&rarr; answered", send: "&rarr;" };
+  setHTML(document.getElementById("dialogue"), (s.dialogue || []).map(d => {
+    const kind = VERB[d.kind] ? d.kind : "send";
+    return `<div class="turn ${kind}${kind === "reply" ? " alt" : ""}">
+      <div class="meta">
+        <b>${esc(d.from)}</b>
+        <span class="arw">${VERB[kind]}</span>
+        <b>${esc(d.to)}</b>
+        <span class="t2">${clock(d.at)}</span>
+      </div>
+      <p>${esc(plain(d.text))}</p>
+    </div>`;
+  }).join("") ||
+    `<div class="empty">No agent-to-agent messages yet. This fills when one
+      agent spawns another or sends it a message.</div>`);
+
+  setHTML(document.getElementById("chatter"), (s.chatter || []).map(c =>
+    `<div class="msg${c.live ? " live" : ""}">
+       <span class="who2">${esc(c.lane)}</span>
+       <span class="t2">${clock(c.at)}</span>
+       <p>${esc(plain(c.text))}</p>
+     </div>`).join("") ||
+    `<div class="empty">Nothing said yet.</div>`);
+
+  document.getElementById("roster").innerHTML = s.lanes.map(l => {
+    const live = l.status === "live";
+    const last = l.tools.length ? l.tools[l.tools.length - 1] : null;
+    return `<tr>
+      <td class="who">${esc(l.name)}<span class="ref">${esc(l.ref)}</span></td>
+      <td class="st"><i class="dot ${live ? "on" : "done"}"></i>${live ? "live" : "done"}</td>
+      <td class="tool">${esc(l.model)}</td>
+      <td class="detail">${esc(plain(l.saying)) || "<span class='q'>" + esc(plain(l.brief)) + "</span>"}</td>
+      <td class="detail">${last ? esc(last.name + " " + (last.detail || "")) : "&mdash;"}</td>
+    </tr>`;
+    // every dynamic field above passes through esc(); transcript values can
+    // echo fetched page content and must never reach innerHTML raw.
+  }).join("") || `<tr><td colspan="5" class="empty">No agents found.</td></tr>`;
+
+
+  const rows = s.feed.map(f =>
+    `<tr><td class="t">${clock(f.at)}</td><td class="who">${esc(f.lane)}</td>` +
+    `<td class="tool">${esc(f.name)}</td><td class="detail">${esc(f.detail)}</td></tr>`).join("");
+  document.getElementById("trace").innerHTML = rows ||
+    `<tr><td colspan="4" class="empty">No tool calls recorded yet.</td></tr>`;
+}
+
+/* ---- inspector: click a node, read that agent ------------------------- */
+let inspecting = null;   // lane id, survives repaints
+
+
+/** Delegated so it keeps working after every repaint. */
+document.addEventListener("click", (e) => {
+  if (!last) return;
+  if (e.target.closest(".back")) { inspecting = null; paint(last); return; }
+  // Clicking the dimmed area around the open card closes it, the way any
+  // overlay behaves. Clicking inside it must not.
+  if (e.target.id === "overlay") { inspecting = null; paint(last); return; }
+
+  // A drag that ends on a card is someone selecting text to copy, not someone
+  // asking to open it. Opening would wipe the selection they just made.
+  const sel = window.getSelection();
+  if (sel && !sel.isCollapsed && String(sel).trim().length > 1) return;
+
+  // A balloon expands where it stands. It is one quote, so pushing it into the
+  // full-screen overlay would be more ceremony than the content deserves.
+  const wire = e.target.closest(".wire[data-wire]");
+  if (wire) {
+    const key = wire.dataset.wire;
+    if (openWires.has(key)) { openWires.delete(key); wire.classList.remove("open"); }
+    else { openWires.add(key); wire.classList.add("open"); }
+    const more = wire.querySelector(".more");
+    if (more) more.textContent = openWires.has(key) ? "click to shorten" : "click to read it all";
+    aimTails(document.getElementById("tiers"));
+    return;
+  }
+
+  const row = e.target.closest("tr[data-id]");
+  if (row) {
+    inspecting = inspecting === row.dataset.id ? null : row.dataset.id;
+    paint(last);
+    return;
+  }
+  // Clicks inside an already-open card shouldn't collapse it — you're reading.
+  if (e.target.closest(".node.expanded")) return;
+  const node = e.target.closest(".node[data-id]");
+  if (!node) return;
+  inspecting = node.dataset.id;
+  paint(last);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && inspecting) { inspecting = null; paint(last); return; }
+  // A card is a button, so it has to answer to Enter and Space like one.
+  if (e.key === "Enter" || e.key === " ") {
+    const t = e.target.closest?.("[data-id]");
+    if (t && last && !t.closest(".node.expanded")) {
+      e.preventDefault();
+      inspecting = inspecting === t.dataset.id ? null : t.dataset.id;
+      paint(last);
+    }
+  }
+});
+
+/**
+ * The project/session index. Read once at start and then rarely: it walks
+ * every project folder on disk, which is far too heavy for the 1s poll.
+ */
+let INDEX = { projects: [] };
+
+async function loadIndex() {
+  try {
+    const r = await fetch("/index.json", { cache: "no-store" });
+    if (!r.ok) return;
+    INDEX = await r.json();
+  } catch (e) { return; }
+
+  // Sessions are grouped under their project so the list stays legible once
+  // there are a hundred of them.
+  const ses = F("f-session");
+  const keep = ses.value;
+  // Name the project the auto choice landed on. "this session (auto)" alone
+  // never says WHICH session, and it follows the newest one across projects.
+  const auto = INDEX.projects.length
+    ? `this session (auto) · ${INDEX.projects[0].label}` : "this session (auto)";
+  ses.innerHTML = `<option value="">${esc(auto)}</option>` +
+    INDEX.projects.map(p => {
+      // "1 agent" means the orchestrator worked alone; anything more means it
+      // delegated. Both are real states, so neither reads as empty.
+      const rows = p.sessions.map(s =>
+        `<option value="${esc(s.id)}">${esc(s.title)} · ${
+          s.workers ? `1 + ${s.workers} agents` : "1 agent"}</option>`).join("");
+      return `<optgroup label="${esc(p.label)}">${rows}</optgroup>`;
+    }).join("");
+  ses.value = keep;
+
+  const proj = F("f-projects");
+  const picked = new Set([...proj.selectedOptions].map(o => o.value));
+  proj.innerHTML = INDEX.projects.map(p =>
+    `<option value="${esc(p.slug)}"${picked.has(p.slug) ? " selected" : ""}>${
+      esc(p.label)} · ${p.sessions.length} session${
+      p.sessions.length === 1 ? "" : "s"}</option>`).join("");
+}
+
+/** Query string for the current scope, so the server reads the right files. */
+function scopeQuery() {
+  const group = F("f-group").value;
+  if (group === "project") {
+    const slugs = [...F("f-projects").selectedOptions].map(o => o.value);
+    return slugs.length ? "?project=" + encodeURIComponent(slugs.join(",")) : "";
+  }
+  const s = F("f-session").value;
+  return s ? "?session=" + encodeURIComponent(s) : "";
+}
+
+/** Only one picker is meaningful at a time. */
+function syncPickers() {
+  const group = F("f-group").value;
+  F("pick-session").hidden = group === "project";
+  F("pick-project").hidden = group !== "project";
+
+  // Picking a session from the dropdown is itself a lock, so the box reflects
+  // that rather than being a second, independent piece of state.
+  F("f-lock").checked = !!F("f-session").value;
+}
+
+// Hot reload: the state poll already runs every second, so the server stamps
+// the dashboard's own mtime into it. When the file on disk changes the page
+// reloads itself, which turns editing the CSS into a live edit rather than a
+// manual refresh.
+let uiStamp = null;
+
+async function tick() {
+  try {
+    const r = await fetch("/state.json" + scopeQuery(), { cache: "no-store" });
+    if (!r.ok) return;
+    last = await r.json();
+    if (last.ui_mtime != null) {
+      if (uiStamp === null) uiStamp = last.ui_mtime;
+      else if (last.ui_mtime !== uiStamp) { location.reload(); return; }
+    }
+    // Report render failures. A blanket catch here meant a broken paint()
+    // showed an empty page with a clean console, which is the hardest possible
+    // thing to diagnose. A failed fetch is still normal and stays quiet.
+    try {
+      paint(last);
+    } catch (err) {
+      console.error("paint failed:", err);
+    }
+  } catch (e) { /* server restarting; next tick retries */ }
+}
+// Repaint immediately when a filter changes rather than waiting for the poll.
+let last = null;
+for (const id of ["f-group", "f-depth", "f-model", "f-project",
+                  "f-live", "f-busy", "f-orphan", "f-zoom"]) {
+  F(id).addEventListener("change", () => { if (last) paint(last); });
+}
+
+// Changing scope changes which files the server reads, so it needs a refetch
+// rather than a repaint of what we already have.
+for (const id of ["f-group", "f-session", "f-projects"]) {
+  F(id).addEventListener("change", () => { syncPickers(); tick(); });
+}
+
+// Card width is solved against the container, so a resize has to re-solve it.
+// Without this, dragging the panel narrower leaves cards at their old width and
+// the tree runs off the side.
+let resizeTimer = null;
+const onResize = () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (last) paint(last); }, 80);
+};
+window.addEventListener("resize", onResize);
+if (window.ResizeObserver) {
+  // The VS Code panel resizes without firing a window resize event.
+  new ResizeObserver(onResize).observe(document.getElementById("tiers"));
+}
+
+// Tabs: one visible section at a time.
+// Lock: pin the board to whatever session is showing, so auto-follow stops
+// jumping to whichever conversation happens to be writing at that instant.
+F("f-lock").addEventListener("change", () => {
+  const sel = F("f-session");
+  if (!F("f-lock").checked) {
+    sel.value = "";                       // released: follow the busiest again
+  } else {
+    const root = last && last.lanes.find(l => l.is_root);
+    // The root lane's id IS the session id, which is what the picker holds.
+    if (root && [...sel.options].some(o => o.value === root.id)) sel.value = root.id;
+  }
+  syncPickers();
+  tick();
+});
+
+document.getElementById("zoomer").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-z]");
+  if (!btn || btn.disabled) return;
+  const how = btn.dataset.z;
+  if (how === "fit") { F("f-zoom").value = "fit"; if (last) paint(last); return; }
+  stepZoom(how === "in" ? -1 : 1);   // ZOOM_STEPS runs largest first
+});
+
+document.getElementById("tabs").addEventListener("click", (e) => {
+  const btn = e.target.closest(".tab");
+  if (!btn) return;
+  for (const t of document.querySelectorAll(".tab")) t.classList.toggle("on", t === btn);
+  for (const sec of document.querySelectorAll("section[data-view]")) {
+    sec.hidden = sec.dataset.view !== btn.dataset.view;
+  }
+  // Coming back to the tree, the board has to be re-solved against a container
+  // that finally has a width again. Waiting for the next poll would show the
+  // stale layout first.
+  if (btn.dataset.view === "tree" && last) paint(last);
+});
+
+F("f-zoom").innerHTML = `<option value="fit">fit</option>` +
+  ZOOM_STEPS.map(z => `<option value="${z}">${Math.round(z * 100)}%</option>`).join("");
+F("f-zoom").value = "fit";
+
+syncPickers();
+loadIndex();
+tick();
+setInterval(tick, 1000);
+// New sessions and new projects appear on disk while you watch, but not often.
+setInterval(loadIndex, 30000);
+</script>

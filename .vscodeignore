@@ -1,0 +1,7 @@
+.vscode/**
+.gitignore
+package_vsix.py
+node_modules/**
+**/__pycache__/**
+**/*.pyc
+**/.DS_Store

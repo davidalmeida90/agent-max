@@ -1,0 +1,142 @@
+{
+  "name": "agent-exhibit",
+  "displayName": "Agent Exhibit",
+  "description": "Live view of Claude Code agents and subagents: the tree, what each one is doing, context in play and token spend. Runs entirely on localhost.",
+  "version": "0.1.0",
+  "publisher": "davidarias",
+  "license": "MIT",
+  "icon": "resources/icon.png",
+  "author": {
+    "name": "David Arias"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/davidalmeida90/agent-exhibit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/davidalmeida90/agent-exhibit/issues"
+  },
+  "homepage": "https://github.com/davidalmeida90/agent-exhibit#readme",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "agents",
+    "subagents",
+    "observability"
+  ],
+  "galleryBanner": {
+    "color": "#0C1E48",
+    "theme": "dark"
+  },
+  "main": "./extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Starts a local Python process, so it stays disabled until the workspace is trusted."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Reads Claude Code transcripts from the local filesystem."
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "agentExhibit",
+          "title": "Agents",
+          "icon": "resources/agents.svg"
+        }
+      ]
+    },
+    "views": {
+      "agentExhibit": [
+        {
+          "id": "agentExhibit.dashboard",
+          "name": "Agents",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "agentExhibit.open",
+        "title": "Open Beside Editor",
+        "category": "Agent Exhibit"
+      },
+      {
+        "command": "agentExhibit.focusPanel",
+        "title": "Show in Bottom Panel",
+        "category": "Agent Exhibit"
+      },
+      {
+        "command": "agentExhibit.restart",
+        "title": "Restart Watcher",
+        "category": "Agent Exhibit"
+      },
+      {
+        "command": "agentExhibit.openExternal",
+        "title": "Open in Browser",
+        "category": "Agent Exhibit"
+      },
+      {
+        "command": "agentExhibit.showLogs",
+        "title": "Show Logs",
+        "category": "Agent Exhibit"
+      }
+    ],
+    "configuration": {
+      "title": "Agent Exhibit",
+      "properties": {
+        "agentExhibit.pythonPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Python 3.9+ interpreter used to run the watcher. Leave empty to detect automatically: `py -3` on Windows, then `python3`, then `python`."
+        },
+        "agentExhibit.port": {
+          "type": "number",
+          "default": 8780,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Localhost port the watcher listens on. Only worth changing if the default is already taken."
+        },
+        "agentExhibit.limit": {
+          "type": "number",
+          "default": 16,
+          "minimum": 1,
+          "description": "Maximum number of transcripts to watch. Agents past the cap are hidden without warning, so leave room for subagents spawned mid-run."
+        },
+        "agentExhibit.recentMinutes": {
+          "type": "number",
+          "default": 90,
+          "minimum": 0,
+          "description": "Only show agents active in the last N minutes. Set to 0 to show all."
+        },
+        "agentExhibit.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the watcher automatically when the view is opened."
+        },
+        "agentExhibit.watcherDir": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Advanced. Folder holding your own `watch_agents.py` and `dashboard.html`. Leave empty to use the copy bundled with the extension."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "package": "npx --yes @vscode/vsce package",
+    "publish": "npx --yes @vscode/vsce publish"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.84.0"
+  }
+}
