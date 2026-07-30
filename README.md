@@ -6,9 +6,9 @@
 
 **See what your Claude Code agents are actually doing, while they do it.**
 
-[![Version](https://img.shields.io/visual-studio-marketplace/v/Davidarias01.agent-max?color=0C1E48&label=marketplace)](https://marketplace.visualstudio.com/items?itemName=Davidarias01.agent-max)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/Davidarias01.agent-max?color=0C1E48)](https://marketplace.visualstudio.com/items?itemName=Davidarias01.agent-max)
-[![Rating](https://img.shields.io/visual-studio-marketplace/r/Davidarias01.agent-max?color=0C1E48)](https://marketplace.visualstudio.com/items?itemName=Davidarias01.agent-max)
+[![Marketplace](https://vsmarketplacebadges.dev/version-short/Davidarias01.agent-max.svg?style=flat&color=0C1E48&label=marketplace)](https://marketplace.visualstudio.com/items?itemName=Davidarias01.agent-max)
+[![Installs](https://vsmarketplacebadges.dev/installs-short/Davidarias01.agent-max.svg?style=flat&color=0C1E48)](https://marketplace.visualstudio.com/items?itemName=Davidarias01.agent-max)
+[![Rating](https://vsmarketplacebadges.dev/rating-short/Davidarias01.agent-max.svg?style=flat&color=0C1E48)](https://marketplace.visualstudio.com/items?itemName=Davidarias01.agent-max)
 [![License](https://img.shields.io/github/license/davidalmeida90/agent-max?color=0C1E48)](LICENSE)
 
 </div>
