@@ -3,3 +3,10 @@ node_modules/
 **/__pycache__/
 *.pyc
 .DS_Store
+
+# Never commit a publish token. VSCE_PAT belongs in the environment or in
+# `vsce login`, which stores it outside the repo.
+.env
+.env.*
+*.pat
+.vsce
