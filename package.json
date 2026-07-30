@@ -22,6 +22,7 @@
   },
   "categories": [
     "Visualization",
+    "Machine Learning",
     "Other"
   ],
   "keywords": [
@@ -29,7 +30,10 @@
     "claude code",
     "agents",
     "subagents",
-    "observability"
+    "observability",
+    "ai",
+    "monitoring",
+    "anthropic"
   ],
   "galleryBanner": {
     "color": "#0C1E48",
@@ -138,5 +142,11 @@
   },
   "devDependencies": {
     "@types/vscode": "^1.84.0"
-  }
+  },
+  "preview": false,
+  "qna": "marketplace",
+  "extensionKind": [
+    "workspace"
+  ],
+  "markdown": "github"
 }
