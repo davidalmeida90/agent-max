@@ -6,9 +6,9 @@
 
 **See what your Claude Code agents are actually doing, while they do it.**
 
-[![Version](https://img.shields.io/visual-studio-marketplace/v/davidarias.agent-max?color=0C1E48&label=marketplace)](https://marketplace.visualstudio.com/items?itemName=davidarias.agent-max)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/davidarias.agent-max?color=0C1E48)](https://marketplace.visualstudio.com/items?itemName=davidarias.agent-max)
-[![Rating](https://img.shields.io/visual-studio-marketplace/r/davidarias.agent-max?color=0C1E48)](https://marketplace.visualstudio.com/items?itemName=davidarias.agent-max)
+[![Version](https://img.shields.io/visual-studio-marketplace/v/davidarias011.agent-max?color=0C1E48&label=marketplace)](https://marketplace.visualstudio.com/items?itemName=davidarias011.agent-max)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/davidarias011.agent-max?color=0C1E48)](https://marketplace.visualstudio.com/items?itemName=davidarias011.agent-max)
+[![Rating](https://img.shields.io/visual-studio-marketplace/r/davidarias011.agent-max?color=0C1E48)](https://marketplace.visualstudio.com/items?itemName=davidarias011.agent-max)
 [![License](https://img.shields.io/github/license/davidalmeida90/agent-max?color=0C1E48)](LICENSE)
 
 </div>
@@ -27,7 +27,7 @@ is holding, and what it has spent.
 **From the command line:**
 
 ```
-code --install-extension davidarias.agent-max
+code --install-extension davidarias011.agent-max
 ```
 
 ## Opening it
