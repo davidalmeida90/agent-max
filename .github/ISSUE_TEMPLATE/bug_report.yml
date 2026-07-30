@@ -1,0 +1,64 @@
+name: Bug report
+description: Something is not working
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: run **Agent Max: Show Logs** and check the output channel.
+        Most problems are the watcher failing to start, and the reason is in there.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output channel
+      description: Paste the contents of **Agent Max: Show Logs**.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: Output of `py -3 --version` on Windows, or `python3 --version`.
+      placeholder: "3.11.9"
+    validations:
+      required: true
+
+  - type: input
+    id: vscode
+    attributes:
+      label: VS Code version
+      description: Help → About, the first line.
+      placeholder: "1.96.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Remote SSH / Codespaces / WSL
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: The Agents panel is open and I have run a Claude Code session with subagents
+        - label: Nothing else is already listening on the configured port

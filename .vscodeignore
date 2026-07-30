@@ -1,8 +1,12 @@
 .vscode/**
+.github/**
+docs/**
 .gitignore
+.gitattributes
+.editorconfig
 package_vsix.py
 node_modules/**
 **/__pycache__/**
 **/*.pyc
 **/.DS_Store
-docs/**
+*.vsix

@@ -1,0 +1,13 @@
+* text=auto eol=lf
+
+# The watcher ships inside the .vsix and runs on the user's machine.
+# Keep it LF so the packaged file is byte-identical everywhere.
+*.py        text eol=lf
+*.html      text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+
+*.png       binary
+*.jpg       binary
+*.gif       binary
+*.vsix      binary
