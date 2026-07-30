@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0]
+
+- Status bar item with the live agent count. It appears only while the watcher
+  is running and hides itself when nothing is going on, so it does not sit in
+  the status bar for people who are not using it. Click it to open the exhibit.
+  Turn it off with `agentMax.statusBar`.
+
 ## [0.1.1]
 
 - Buttons on the Agents panel title bar: open beside the editor, and restart

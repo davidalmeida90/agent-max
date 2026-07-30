@@ -2,7 +2,7 @@
   "name": "agent-max",
   "displayName": "Agent Max",
   "description": "Live view of Claude Code agents and subagents: the tree, what each one is doing, context in play and token spend. Runs entirely on localhost.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "Davidarias01",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -101,10 +101,16 @@
     "configuration": {
       "title": "Agent Max",
       "properties": {
-        "agentMax.pythonPath": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Python 3.9+ interpreter used to run the watcher. Leave empty to detect automatically: `py -3` on Windows, then `python3`, then `python`."
+        "agentMax.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the watcher automatically when the view is opened."
+        },
+        "agentMax.limit": {
+          "type": "number",
+          "default": 16,
+          "minimum": 1,
+          "description": "Maximum number of transcripts to watch. Agents past the cap are hidden without warning, so leave room for subagents spawned mid-run."
         },
         "agentMax.port": {
           "type": "number",
@@ -113,11 +119,10 @@
           "maximum": 65535,
           "description": "Localhost port the watcher listens on. Only worth changing if the default is already taken."
         },
-        "agentMax.limit": {
-          "type": "number",
-          "default": 16,
-          "minimum": 1,
-          "description": "Maximum number of transcripts to watch. Agents past the cap are hidden without warning, so leave room for subagents spawned mid-run."
+        "agentMax.pythonPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Python 3.9+ interpreter used to run the watcher. Leave empty to detect automatically: `py -3` on Windows, then `python3`, then `python`."
         },
         "agentMax.recentMinutes": {
           "type": "number",
@@ -125,10 +130,10 @@
           "minimum": 0,
           "description": "Only show agents active in the last N minutes. Set to 0 to show all."
         },
-        "agentMax.autoStart": {
+        "agentMax.statusBar": {
           "type": "boolean",
           "default": true,
-          "description": "Start the watcher automatically when the view is opened."
+          "markdownDescription": "Show a status bar item with the live agent count. It appears only while the watcher is running and hides itself when nothing is going on."
         },
         "agentMax.watcherDir": {
           "type": "string",
@@ -181,5 +186,8 @@
   "extensionKind": [
     "workspace"
   ],
-  "markdown": "github"
+  "markdown": "github",
+  "activationEvents": [
+    "onStartupFinished"
+  ]
 }

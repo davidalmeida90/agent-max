@@ -220,11 +220,76 @@ async function openAsTab() {
   return tab;
 }
 
+// ── status bar ────────────────────────────────────────────────────────────
+
+/**
+ * A status bar item carrying the live agent count.
+ *
+ * It hides whenever the watcher is not answering, which is most of the time
+ * for most users. An extension that plants a permanent item in the status bar
+ * for a feature you are not currently using is an extension people uninstall,
+ * so this one only appears when there is something to report.
+ *
+ * The probe is a loopback connect that fails instantly when nothing is
+ * listening, and it backs off while idle rather than running hot forever.
+ */
+function startStatusBar(context) {
+  const item = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left, 100
+  );
+  item.command = "agentMax.open";
+  context.subscriptions.push(item);
+
+  const ACTIVE_MS = 4000;
+  const IDLE_MS = 15000;
+  let timer = null;
+  const schedule = (ms) => { timer = setTimeout(tick, ms); };
+
+  function tick() {
+    if (!vscode.workspace.getConfiguration("agentMax").get("statusBar", true)) {
+      item.hide();
+      return schedule(IDLE_MS);
+    }
+    const { port } = cfg();
+    const req = http.get(
+      { host: "127.0.0.1", port, path: "/state.json", timeout: 900 },
+      (res) => {
+        let buf = "";
+        res.on("data", (d) => (buf += d));
+        res.on("end", () => {
+          try {
+            const t = (JSON.parse(buf) || {}).totals || {};
+            const lanes = t.lanes || 0;
+            const live = t.live || 0;
+            if (!lanes) { item.hide(); return schedule(IDLE_MS); }
+            item.text = live
+              ? `$(pulse) ${live}/${lanes} agents`
+              : `$(circuit-board) ${lanes} agents`;
+            item.tooltip = live
+              ? `${live} of ${lanes} agents running. Click to open Agent Max.`
+              : `${lanes} agents, none running. Click to open Agent Max.`;
+            item.show();
+            schedule(ACTIVE_MS);
+          } catch {
+            schedule(ACTIVE_MS);      // mid-write, try again shortly
+          }
+        });
+      }
+    );
+    req.on("error", () => { item.hide(); schedule(IDLE_MS); });
+    req.on("timeout", () => req.destroy());
+  }
+
+  tick();
+  context.subscriptions.push({ dispose: () => clearTimeout(timer) });
+}
+
 // ── lifecycle ─────────────────────────────────────────────────────────────
 
 function activate(context) {
   output = vscode.window.createOutputChannel("Agent Max");
   const provider = new AgentMaxViewProvider();
+  startStatusBar(context);
 
   context.subscriptions.push(
     output,
