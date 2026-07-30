@@ -35,16 +35,16 @@ code --install-extension Davidarias01.agent-max
 Three ways, depending on where you want it. The watcher starts on first open,
 whichever you pick.
 
-**Beside your editor**, which is what most people want. Press
-<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> and run **Agent Max: Open Beside
-Editor**.
+**Start in the bottom panel.** After installing, there is an **Agents** tab
+next to Terminal, Problems and Output. Nothing to run, it is just there.
 
-It opens as a normal editor tab in the column to the right, so you can split it,
-move it or maximise it like any other tab.
+**Then send it to the right.** In that panel's title bar there is a split icon.
+Click it and the exhibit opens as a normal editor tab in the column beside your
+code, where it can be split, moved or maximised like any other tab.
 
-**In the bottom panel:** there is an **Agents** tab next to Terminal, Problems
-and Output. To move it to the side, right-click the panel and choose *Move Panel
-Right*.
+The same thing is on the command palette as **Agent Max: Open Beside Editor**,
+and the panel itself can be moved with a right-click → *Move Panel Right* if you
+would rather keep it as a panel.
 
 **In a browser:** **Agent Max: Open in Browser**, useful on a second monitor.
 

@@ -2,7 +2,7 @@
   "name": "agent-max",
   "displayName": "Agent Max",
   "description": "Live view of Claude Code agents and subagents: the tree, what each one is doing, context in play and token spend. Runs entirely on localhost.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "Davidarias01",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -73,7 +73,8 @@
       {
         "command": "agentMax.open",
         "title": "Open Beside Editor",
-        "category": "Agent Max"
+        "category": "Agent Max",
+        "icon": "$(split-horizontal)"
       },
       {
         "command": "agentMax.focusPanel",
@@ -83,7 +84,8 @@
       {
         "command": "agentMax.restart",
         "title": "Restart Watcher",
-        "category": "Agent Max"
+        "category": "Agent Max",
+        "icon": "$(refresh)"
       },
       {
         "command": "agentMax.openExternal",
@@ -134,6 +136,37 @@
           "markdownDescription": "Advanced. Folder holding your own `watch_agents.py` and `dashboard.html`. Leave empty to use the copy bundled with the extension."
         }
       }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "agentMax.open",
+          "when": "view == agentMax.dashboard",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agentMax.restart",
+          "when": "view == agentMax.dashboard",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "agentMax.open"
+        },
+        {
+          "command": "agentMax.focusPanel"
+        },
+        {
+          "command": "agentMax.restart"
+        },
+        {
+          "command": "agentMax.openExternal"
+        },
+        {
+          "command": "agentMax.showLogs"
+        }
+      ]
     }
   },
   "scripts": {

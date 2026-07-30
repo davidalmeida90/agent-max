@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.1]
+
+- Buttons on the Agents panel title bar: open beside the editor, and restart
+  the watcher. Opening it to the side previously required the command palette,
+  which nobody finds on a freshly installed extension.
+
 ## [0.1.0]
 
 First release.
