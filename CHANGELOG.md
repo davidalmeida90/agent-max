@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.1]
+
+- The status bar item stays visible instead of hiding when nothing is running,
+  so a fresh install has one entry point that is simply there. It shows a live
+  count during a run and a plain label the rest of the time.
+
 ## [0.2.0]
 
 - Status bar item with the live agent count. It appears only while the watcher

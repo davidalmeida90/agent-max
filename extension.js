@@ -225,25 +225,35 @@ async function openAsTab() {
 /**
  * A status bar item carrying the live agent count.
  *
- * It hides whenever the watcher is not answering, which is most of the time
- * for most users. An extension that plants a permanent item in the status bar
- * for a feature you are not currently using is an extension people uninstall,
- * so this one only appears when there is something to report.
+ * Always present, so a newly installed extension has one visible entry point
+ * rather than a command palette line nobody knows to look for. What changes is
+ * what it says: a running count while agents are out, a plain label otherwise.
  *
  * The probe is a loopback connect that fails instantly when nothing is
  * listening, and it backs off while idle rather than running hot forever.
+ * `agentMax.statusBar` removes it for anyone who wants the space back.
  */
 function startStatusBar(context) {
   const item = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left, 100
   );
   item.command = "agentMax.open";
+  item.text = "$(circuit-board) Agents";
+  item.tooltip = "Open Agent Max";
+  item.show();
   context.subscriptions.push(item);
 
   const ACTIVE_MS = 4000;
   const IDLE_MS = 15000;
   let timer = null;
   const schedule = (ms) => { timer = setTimeout(tick, ms); };
+
+  const idle = () => {
+    item.text = "$(circuit-board) Agents";
+    item.tooltip = "Open Agent Max";
+    item.show();
+    schedule(IDLE_MS);
+  };
 
   function tick() {
     if (!vscode.workspace.getConfiguration("agentMax").get("statusBar", true)) {
@@ -261,7 +271,7 @@ function startStatusBar(context) {
             const t = (JSON.parse(buf) || {}).totals || {};
             const lanes = t.lanes || 0;
             const live = t.live || 0;
-            if (!lanes) { item.hide(); return schedule(IDLE_MS); }
+            if (!lanes) return idle();
             item.text = live
               ? `$(pulse) ${live}/${lanes} agents`
               : `$(circuit-board) ${lanes} agents`;
@@ -276,7 +286,7 @@ function startStatusBar(context) {
         });
       }
     );
-    req.on("error", () => { item.hide(); schedule(IDLE_MS); });
+    req.on("error", idle);            // watcher down: plain label, still clickable
     req.on("timeout", () => req.destroy());
   }
 

@@ -42,9 +42,10 @@ next to Terminal, Problems and Output. Nothing to run, it is just there.
 Click it and the exhibit opens as a normal editor tab in the column beside your
 code, where it can be split, moved or maximised like any other tab.
 
-**Or from the status bar.** While agents are running, a live count appears at
-the bottom left: `2/8 agents`. Click it to open the exhibit. It hides itself
-when nothing is running, and `agentMax.statusBar` turns it off entirely.
+**Or from the status bar.** There is an **Agents** item at the bottom left from
+the moment you install. Click it to open the exhibit. During a run it turns
+into a live count, `2/8 agents`, so you can see work happening without opening
+anything. `agentMax.statusBar` removes it.
 
 The same thing is on the command palette as **Agent Max: Open Beside Editor**,
 and the panel itself can be moved with a right-click → *Move Panel Right* if you
@@ -123,7 +124,7 @@ output back to the call that produced it.
 | `agentMax.port` | `8780` | Localhost port the watcher listens on |
 | `agentMax.limit` | `16` | Maximum transcripts watched at once |
 | `agentMax.recentMinutes` | `90` | Hide agents idle longer than this. `0` shows all |
-| `agentMax.statusBar` | `true` | Live agent count in the status bar while a run is active |
+| `agentMax.statusBar` | `true` | Show the status bar item, with a live count during a run |
 | `agentMax.autoStart` | `true` | Start the watcher when the view opens |
 | `agentMax.watcherDir` | `""` | Advanced. Point at your own copy of the watcher |
 
