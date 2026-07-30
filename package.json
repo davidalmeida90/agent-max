@@ -134,7 +134,14 @@
           "markdownDescription": "Advanced. Folder holding your own `watch_agents.py` and `dashboard.html`. Leave empty to use the copy bundled with the extension."
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "agentMax.open",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a"
+      }
+    ]
   },
   "scripts": {
     "package": "npx --yes @vscode/vsce package",

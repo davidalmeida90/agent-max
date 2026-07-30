@@ -30,8 +30,24 @@ is holding, and what it has spent.
 code --install-extension davidarias.agent-max
 ```
 
-Then open the **Agents** panel at the bottom, or run **Agent Max: Open Beside
-Editor** from the command palette. The watcher starts on first open.
+## Opening it
+
+Three ways, depending on where you want it. The watcher starts on first open,
+whichever you pick.
+
+**Beside your editor**, which is what most people want:
+
+- <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd> (<kbd>Cmd</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd> on macOS), or
+- <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> → **Agent Max: Open Beside Editor**
+
+It opens as a normal editor tab in the column to the right, so you can split it,
+move it or maximise it like any other tab.
+
+**In the bottom panel:** there is an **Agents** tab next to Terminal, Problems
+and Output. To move it to the side, right-click the panel and choose *Move Panel
+Right*.
+
+**In a browser:** **Agent Max: Open in Browser**, useful on a second monitor.
 
 > **Requires Python 3.9 or later** on your PATH. The watcher is a single
 > standard-library script with no pip dependencies, bundled with the extension.
@@ -85,7 +101,7 @@ output back to the call that produced it.
 
 | Command | Description |
 |---|---|
-| `Agent Max: Open Beside Editor` | Open the exhibit as an editor tab |
+| `Agent Max: Open Beside Editor` | Open as an editor tab to the right · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd> |
 | `Agent Max: Show in Bottom Panel` | Focus the panel view |
 | `Agent Max: Restart Watcher` | Stop and restart the local process |
 | `Agent Max: Open in Browser` | Open the same page outside VS Code |
