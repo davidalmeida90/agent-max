@@ -15,8 +15,8 @@
 
 When a session delegates, the work disappears. You see *"Agent launched
 successfully"* and then nothing until it returns. Agent Max puts the whole tree
-on screen while it runs: every agent, what it is working on, how much context it
-is holding, and what it has spent.
+on screen while it runs, so you can watch every agent work, see what it is
+holding against its context window, and know what it has spent.
 
 ![Agents appearing and working during a run](docs/live.gif)
 
@@ -146,9 +146,9 @@ The watcher is a single readable Python file:
 
 ## Known behaviour
 
-- If the port is already serving, the extension **reuses it** rather than
-  starting a second watcher. Two processes on one port means the second binds
-  nothing and exits quietly, which looks identical to the extension being broken.
+- If the port is already serving, the extension **reuses it** and does not start
+  a second watcher. Two processes on one port means the second binds nothing and
+  exits quietly, which looks identical to the extension being broken.
 - Closing the last VS Code window stops the watcher it started.
 
 ## Contributing
