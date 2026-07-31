@@ -32,24 +32,28 @@ code --install-extension Davidarias01.agent-max
 
 ## Opening it
 
-Three ways, depending on where you want it. The watcher starts on first open,
-whichever you pick.
+**Install it, then click the button at the bottom left of VS Code.** That is the
+whole thing. The item says **Agents**, it sits in the status bar next to the
+errors and warnings counts, and clicking it opens the exhibit beside your code.
 
-**Start in the bottom panel.** After installing, there is an **Agents** tab
-next to Terminal, Problems and Output. Nothing to run, it is just there.
+![Clicking the Agents button in the status bar to open the exhibit](docs/open.gif)
 
-**Then send it to the right.** In that panel's title bar there is a split icon.
-Click it and the exhibit opens as a normal editor tab in the column beside your
-code, where it can be split, moved or maximised like any other tab.
+> **If you do not see the button, restart VS Code.** A freshly installed
+> extension does not always activate in the window you installed it from. One
+> reload and the button is there for good.
 
-**Or from the status bar.** There is an **Agents** item at the bottom left from
-the moment you install. Click it to open the exhibit. During a run it turns
-into a live count, `2/8 agents`, so you can see work happening without opening
-anything. `agentMax.statusBar` removes it.
+During a run the button turns into a live count, `2/8 agents`, so you can tell
+work is happening without opening anything. `agentMax.statusBar` removes it if
+you want the space back.
 
-The same thing is on the command palette as **Agent Max: Open Beside Editor**,
-and the panel itself can be moved with a right-click → *Move Panel Right* if you
-would rather keep it as a panel.
+**Two other ways in**, if you would rather not use the status bar. There is an
+**Agents** tab in the bottom panel next to Terminal, Problems and Output, from
+the moment you install. In that panel's title bar is a split icon that sends the
+exhibit to the column beside your code, where it behaves like any other editor
+tab. And the command palette has **Agent Max: Open Beside Editor**.
+
+The watcher starts on first open, whichever way you get there. If you prefer the
+panel, a right-click gives you *Move Panel Right*.
 
 **In a browser:** **Agent Max: Open in Browser**, useful on a second monitor.
 
