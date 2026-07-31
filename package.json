@@ -2,7 +2,7 @@
   "name": "agent-max",
   "displayName": "Agent Max",
   "description": "Live view of Claude Code agents and subagents: the tree, what each one is doing, context in play and token spend. Runs entirely on localhost.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publisher": "Davidarias01",
   "license": "MIT",
   "icon": "resources/icon.png",
