@@ -46,21 +46,42 @@ During a run the button turns into a live count, `2/8 agents`, so you can tell
 work is happening without opening anything. `agentMax.statusBar` removes it if
 you want the space back.
 
-**Two other ways in**, if you would rather not use the status bar. There is an
-**Agents** tab in the bottom panel next to Terminal, Problems and Output, from
-the moment you install. In that panel's title bar is a split icon that sends the
-exhibit to the column beside your code, where it behaves like any other editor
-tab. And the command palette has **Agent Max: Open Beside Editor**.
+### Other ways to open it
 
-The watcher starts on first open, whichever way you get there. If you prefer the
-panel, a right-click gives you *Move Panel Right*.
+The status bar is the quickest, but nothing depends on it. Any of these gets you
+to the same place, and the watcher starts on first open whichever one you use.
 
-**In a browser:** **Agent Max: Open in Browser**, useful on a second monitor.
+**From the bottom panel.** There is an **Agents** tab next to Terminal, Problems
+and Output from the moment you install. Nothing to run, it is already there.
+This is the one to use if you like keeping it docked under your code.
 
-No default keyboard shortcut ships with the extension, deliberately, because a
-single combo would collide with whatever you already have bound. To add your
-own: <kbd>Ctrl</kbd>+<kbd>K</kbd> <kbd>Ctrl</kbd>+<kbd>S</kbd>, search
-`Agent Max`, click the `+` next to the command you want.
+**From the panel to the right.** In the Agents panel's title bar there are two
+icons. The split one moves the exhibit into the column beside your editor, where
+it behaves like any other tab and can be split, dragged or maximised. The other
+restarts the watcher.
+
+**From the command palette.** <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>, or
+<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on a Mac, then:
+
+| Type this | What you get |
+|---|---|
+| `Agent Max: Open Beside Editor` | The exhibit as an editor tab to the right |
+| `Agent Max: Show in Bottom Panel` | Focus the panel view instead |
+| `Agent Max: Open in Browser` | The same page in your browser |
+
+**In a browser, on a second screen.** **Agent Max: Open in Browser** serves the
+identical page outside VS Code, which is the one to use if you want the run on a
+monitor of its own while you keep coding on the main one.
+
+**With your own keyboard shortcut.** No default shortcut ships with the
+extension, deliberately, because any combo worth binding is already bound to
+something in somebody's setup. To pick your own:
+<kbd>Ctrl</kbd>+<kbd>K</kbd> <kbd>Ctrl</kbd>+<kbd>S</kbd>, search `Agent Max`,
+then click the `+` beside the command you want.
+
+**Moving it after the fact.** Right-click the panel and *Move Panel Right* if
+you would rather keep it as a panel but on the side. VS Code remembers where you
+put it.
 
 > **Requires Python 3.9 or later** on your PATH. The watcher is a single
 > standard-library script with no pip dependencies, bundled with the extension.
