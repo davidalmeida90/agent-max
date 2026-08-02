@@ -1,7 +1,7 @@
 {
   "name": "agent-max",
   "displayName": "Agent Max",
-  "description": "Live view of Claude Code agents and subagents: the tree, what each one is doing, context in play and token spend. Runs entirely on localhost.",
+  "description": "Live view of Claude Code agents, subagents and workflow runs: the tree, phase timelines, context in play and token spend. Runs entirely on localhost.",
   "version": "0.2.3",
   "publisher": "Davidarias01",
   "license": "MIT",
@@ -33,7 +33,10 @@
     "observability",
     "ai",
     "monitoring",
-    "anthropic"
+    "anthropic",
+    "workflow",
+    "workflows",
+    "orchestration"
   ],
   "galleryBanner": {
     "color": "#0C1E48",

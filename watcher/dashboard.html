@@ -654,6 +654,155 @@
   }
   .q { color: var(--faint); }
 
+  /* ── Workflow runs ─────────────────────────────────────────────────────
+     A run list on the left, the selected run on the right. No fixed heights
+     anywhere: this panel renders while its section can be hidden, and
+     measuring a hidden element returns 0, which is the sizeRoster hazard. */
+  .tab-badge {
+    display: inline-block; margin-left: 5px; padding: 0 5px;
+    font: 600 9px/15px var(--mono); border-radius: 7px;
+    background: var(--wine); color: #fff; vertical-align: 1px;
+  }
+  .wf-wrap { display: grid; grid-template-columns: minmax(190px, 254px) 1fr; gap: 18px; align-items: start; }
+  .wf-wrap > div:first-child { position: sticky; top: 6px; }
+  .wf-scope { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
+  .wf-scope span { font: 9px/1 var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .09em; }
+  .wf-scope select { font: inherit; font-size: 11.5px; padding: 2px 4px; flex: 1; min-width: 0; }
+  /* Sticky, and align-self:start so it does not stretch to the height of a
+     104-row timeline and paint a column of --rule down the page. A run with
+     104 agents scrolls a long way, and losing the switcher on the way down
+     means going all the way back up to change run. */
+  /* The sticky is on the wrapper above, not here, so the scope select stays
+     pinned with the list instead of scrolling away from it. */
+  .wf-list {
+    display: flex; flex-direction: column; gap: 1px;
+    background: var(--rule); border: 1px solid var(--rule);
+    max-height: calc(100vh - 58px); overflow-y: auto;
+  }
+  .wf-run {
+    background: var(--panel); border: 0; text-align: left; width: 100%;
+    padding: 9px 11px; cursor: pointer; font: inherit; color: var(--ink);
+    display: block;
+  }
+  .wf-run:hover { background: var(--fill); }
+  .wf-run[aria-current="true"] { background: var(--fill); box-shadow: inset 3px 0 0 var(--navy); }
+  .wf-run:focus-visible { outline: 2px solid var(--navy); outline-offset: -2px; }
+  .wf-run .nm { display: block; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wf-run .sub { display: block; font: 9px/1.5 var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .08em; margin-top: 2px; }
+  /* Status never rides on colour alone: each carries a distinct glyph, because
+     red/green is unreadable to some viewers and dies under video compression. */
+  .wf-st { font-weight: 700; }
+  .wf-st.completed { color: var(--navy); }
+  .wf-st.killed, .wf-st.failed { color: var(--wine); }
+  .wf-st.running { color: var(--wine); }
+  .wf-head { border-bottom: 1px solid var(--ink); padding-bottom: 9px; margin-bottom: 13px; }
+  .wf-head h2 { margin: 0 0 3px; font-size: 17px; letter-spacing: -.01em; }
+  .wf-head .meta { font: 10px/1.6 var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .08em; }
+  .wf-kpi { display: flex; flex-wrap: wrap; gap: 0 26px; margin: 11px 0 15px; }
+  .wf-kpi div { min-width: 62px; }
+  .wf-kpi .k { display: block; font: 9px/1.6 var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .09em; }
+  .wf-kpi .v { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
+  .wf-err { border-left: 3px solid var(--wine); background: var(--fill); padding: 8px 11px; margin-bottom: 14px; font: 10.5px/1.55 var(--mono); white-space: pre-wrap; overflow-x: auto; }
+  .wf-phase { margin-bottom: 3px; }
+  /* Sticky under the axis. Verify alone is 75 rows in the deep-research run,
+     and without this you are thirty bars into a phase with nothing on screen
+     saying which one. Opaque background, or the bars show through it. */
+  .wf-phase .ph-h {
+    display: flex; align-items: baseline; gap: 9px; padding: 7px 0 4px;
+    border-bottom: 1px solid var(--rule);
+    position: sticky; top: 26px; background: var(--paper); z-index: 2;
+  }
+  .wf-phase .ph-n { font: 9px/1 var(--mono); color: var(--faint); letter-spacing: .1em; }
+  .wf-phase .ph-t { font-size: 12.5px; font-weight: 600; }
+  .wf-phase .ph-d { font-size: 11px; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* One row per agent. The bar is positioned as a percentage of the run's own
+     span, so it needs no measurement and survives being rendered while hidden. */
+  .wf-bar { display: grid; grid-template-columns: minmax(96px, 172px) 1fr minmax(78px, auto); gap: 10px; align-items: center; padding: 2px 0; }
+  .wf-bar .lb { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Only rows with a loaded transcript are clickable, and they say so. A row
+     that looks interactive and does nothing is worse than one that looks
+     inert, so the affordance is attached to the capability. */
+  .wf-bar.openable { cursor: pointer; }
+  .wf-bar.openable:hover .lb { color: var(--navy); text-decoration: underline; }
+  .wf-bar.openable:hover .track { outline: 1px solid var(--line2); }
+  .wf-bar.openable:focus-visible { outline: 2px solid var(--navy); outline-offset: 1px; }
+  .wf-bar .track { position: relative; height: 11px; background: var(--fill); }
+  .wf-bar .fill { position: absolute; top: 0; bottom: 0; background: var(--navy); min-width: 2px; }
+  /* An agent that is working right now. The stripes travel, so the bar reads
+     as active even in a still screenshot where a solid bar would not. The
+     animation is on the background position only: nothing reflows, so 200 of
+     these cost nothing. */
+  .wf-bar .fill.progress {
+    background: repeating-linear-gradient(135deg, var(--wine) 0 4px, #B7515F 4px 8px);
+    background-size: 200% 100%;
+    animation: wf-crawl 1.1s linear infinite;
+  }
+  @keyframes wf-crawl { to { background-position: -22px 0; } }
+  .wf-bar.working .lb { font-weight: 600; }
+  .wf-bar .dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--wine); margin-right: 6px; vertical-align: 1px;
+    animation: wf-pulse 1.3s ease-in-out infinite;
+  }
+  @keyframes wf-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
+  /* Someone who has asked for less motion gets the colour and the dot, but
+     nothing that moves. */
+  @media (prefers-reduced-motion: reduce) {
+    .wf-bar .fill.progress, .wf-bar .dot { animation: none; }
+  }
+  .wf-bar .fill.start { background: var(--rule); }
+  .wf-bar .nums { font: 9.5px/1 var(--mono); color: var(--faint); text-align: right; font-variant-numeric: tabular-nums; }
+  /* The scale sits ABOVE the bars and stays there. It used to be printed once
+     at the bottom, 104 rows below the thing it describes, which is the same as
+     not having it. Grid-aligned to the track column so the labels land under
+     the bar area rather than under the agent names. */
+  .wf-axis {
+    display: grid; grid-template-columns: minmax(96px, 172px) 1fr minmax(78px, auto);
+    gap: 10px; font: 9px/1 var(--mono); color: var(--faint);
+    position: sticky; top: 0; background: var(--paper); z-index: 3;
+    padding: 6px 0 5px; border-bottom: 1px solid var(--rule);
+  }
+  .wf-axis .ticks { display: flex; justify-content: space-between; }
+  .wf-none { color: var(--muted); font-size: 12.5px; padding: 18px 2px; }
+  .wf-sec { margin-top: 17px; }
+  .wf-sec > summary { cursor: pointer; font: 9px/1.8 var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .09em; }
+  .wf-sec > summary:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+  .wf-sec pre { background: var(--fill); padding: 10px 12px; overflow-x: auto; font: 10.5px/1.5 var(--mono); margin: 7px 0 0; max-height: 340px; }
+
+  /* A VS Code side panel is ~380px. Two columns plus a 172px label column and
+     a 78px numbers column cannot fit that, and the overflow pushed the whole
+     PAGE into horizontal scroll rather than just this panel. Stack instead,
+     and let the label column collapse. min-width:0 on the grid children is the
+     part that actually does the work: a grid track defaults to min-content,
+     so a long unbroken label refuses to shrink and blows out the row. */
+  @media (max-width: 760px) {
+    .wf-wrap { grid-template-columns: 1fr; gap: 12px; }
+    .wf-wrap > div:first-child { position: static; }
+    .wf-list { max-height: 190px; }
+    .wf-bar { grid-template-columns: minmax(0, 96px) 1fr minmax(0, 62px); gap: 7px; }
+    .wf-axis { grid-template-columns: minmax(0, 96px) 1fr minmax(0, 62px); gap: 7px; }
+    .wf-axis .ticks span:nth-child(2), .wf-axis .ticks span:nth-child(4) { display: none; }
+    .wf-kpi { gap: 0 16px; }
+    .wf-phase .ph-h { top: 24px; }
+    .wf-phase .ph-d { display: none; }
+  }
+  .wf-wrap > *, .wf-bar > *, .wf-axis > * { min-width: 0; }
+
+  /* Pre-existing, found while testing the panel at 380px and fixed here
+     because it makes the whole PAGE scroll sideways on every tab, not just
+     this one. #f-session already carries max-width:min(420px,100%), but a
+     flex item defaults to min-width:auto, so the select refuses to shrink
+     below its longest option and pushes the bar past the viewport. The
+     "other session active" badge does the same in the tab strip. */
+  @media (max-width: 760px) {
+    .bar > *, .bar select { min-width: 0; }
+    #f-session { max-width: 100%; }
+    .tabs .watching .wo {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      max-width: 42vw; display: inline-block; vertical-align: bottom;
+    }
+  }
+
   @media (max-width: 860px) {
     body { padding: 22px 16px 40px; }
     /* No grid override here. The column count and card width are solved in JS
@@ -770,6 +919,10 @@
 
 <nav class="tabs" id="tabs">
   <button class="tab on" data-view="tree">Agents</button>
+  <!-- Second, beside Agents, because the two answer the same question at
+       different scales. Everything here must stay before .watching: that span
+       carries margin-left:auto, so a button after it lands on the far end. -->
+  <button class="tab" data-view="workflow">Workflows<span class="tab-badge" id="wf-badge" hidden></span></button>
   <button class="tab" data-view="dialogue">Dialogue</button>
   <button class="tab" data-view="log">Log</button>
   <button class="tab" data-view="trace">Trace</button>
@@ -805,7 +958,11 @@
 
   <!-- An opened agent floats above the board instead of pushing it around, so
        the tree you were reading stays exactly where you left it. -->
-  <div class="overlay" id="overlay" hidden></div>
+  <!-- The inspector overlay used to live here, inside the tree section, which
+       meant it was display:none on every other tab. It is now a sibling of the
+       sections (just before <script>) so the Workflows tab can open an agent
+       with the same card. -->
+
   <div class="exhibit">
     <div id="tiers"></div>
     <!-- Agents that ran but are no longer part of the current work. Same cards
@@ -844,6 +1001,31 @@
     <tbody id="trace"></tbody>
   </table>
 </section>
+
+<!-- Workflow runs. A run is a different object from an agent: it has a status
+     that outlives its agents, declared phases, a script and a returned value,
+     and it is worth browsing after it has finished. Hence its own tab rather
+     than 104 extra rows in the tree. -->
+<section data-view="workflow" hidden>
+  <div class="wf-wrap">
+    <div>
+      <label class="wf-scope">
+        <span>Runs from</span>
+        <select id="wf-scope">
+          <option value="session">this session</option>
+          <option value="project">this project</option>
+          <option value="all">everywhere</option>
+        </select>
+      </label>
+      <div class="wf-list" id="wf-list" role="list" aria-label="Workflow runs"></div>
+    </div>
+    <div class="wf-detail" id="wf-detail"></div>
+  </div>
+</section>
+
+<!-- Top level, outside every tab, so opening an agent works from the tree and
+     from a workflow timeline alike. -->
+<div class="overlay" id="overlay" hidden></div>
 
 <script>
 const ROLES = ["Universe", "Cost & capacity", "Regime (vintage)"];
@@ -1461,6 +1643,195 @@ function applyFilters(lanes, f) {
   );
 }
 
+// ── Workflow runs ────────────────────────────────────────────────────────
+// A run is not an agent. It has a status that outlives every agent it made, a
+// declared phase list, a script and a returned value, and it stays worth
+// reading after it ends. The tree answers "what is happening"; this answers
+// "what did that run do".
+
+// How wide to look for runs. Not the same control as the session picker at the
+// top: that one scopes the live tree, this one scopes the history. Defaults to
+// the session so the tab agrees with the rest of the page on arrival.
+let wfScope = "session";
+let wfPick = null;      // run_id the user selected, sticky across repaints
+let wfDetail = {};      // run_id -> the /workflow.json payload, once fetched
+let wfPending = null;   // run_id currently being fetched, to avoid a stampede
+
+const WF_GLYPH = { completed: "✓", killed: "✕", failed: "✕",
+                   running: "▶", unknown: "·" };
+
+/** ms -> "1h 02m" / "9m 41s" / "3.1s". Durations here span 20s to 52 minutes. */
+function wfDur(ms) {
+  if (!ms || ms < 0) return "—";
+  const s = ms / 1000;
+  if (s < 10) return s.toFixed(1) + "s";
+  if (s < 60) return Math.round(s) + "s";
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + "m " + String(Math.round(s % 60)).padStart(2, "0") + "s";
+  return Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m";
+}
+
+function paintWorkflows(runs) {
+  const badge = F("wf-badge");
+  const running = runs.filter(r => r.status === "running").length;
+  badge.hidden = running === 0;
+  badge.textContent = running || "";
+
+  const list = F("wf-list");
+  if (!runs.length) {
+    setHTML(list, "");
+    setHTML(F("wf-detail"),
+      `<p class="wf-none">No workflow runs for the sessions in view. A run
+       appears here the moment its first agent writes a transcript.</p>`);
+    wfPick = null;
+    return;
+  }
+  // Keep the user's choice across repaints; fall back to the newest run only
+  // when the selected one has dropped out of view entirely.
+  if (!wfPick || !runs.some(r => r.run_id === wfPick)) wfPick = runs[0].run_id;
+
+  setHTML(list, runs.map(r => {
+    const on = r.run_id === wfPick;
+    const glyph = WF_GLYPH[r.status] || WF_GLYPH.unknown;
+    const n = r.agent_count ?? r.on_disk ?? 0;
+    return `<button class="wf-run" role="listitem" data-wf="${esc(r.run_id)}"
+      aria-current="${on}" title="${esc(r.run_id)}">
+      <span class="nm">${esc(r.name)}</span>
+      <span class="sub"><span class="wf-st ${esc(r.status)}">${glyph} ${esc(r.status)}</span>
+        &nbsp;${n} agent${n === 1 ? "" : "s"}${r.duration_ms ? " &nbsp;" + wfDur(r.duration_ms) : ""}</span>
+    </button>`;
+  }).join(""));
+
+  const run = runs.find(r => r.run_id === wfPick);
+  setHTML(F("wf-detail"), wfDetailHTML(run, wfDetail[wfPick]));
+  // Heavy half (script, result, per-agent previews) is a separate fetch, so
+  // the one-second poll stays small. Fetch once per run, then reuse.
+  if (run && run.status !== "running" && !wfDetail[wfPick] && wfPending !== wfPick) {
+    wfPending = wfPick;
+    fetch("/workflow.json?run=" + encodeURIComponent(wfPick))
+      .then(r => r.json())
+      .then(d => { if (d && d.ok) wfDetail[d.run_id] = d; })
+      .catch(() => {})
+      .finally(() => { wfPending = null; });
+  }
+}
+
+function wfDetailHTML(run, full) {
+  if (!run) return `<p class="wf-none">Select a run.</p>`;
+  const agents = run.agents || [];
+  // Which of this run's agents have a transcript loaded in the current view.
+  // A completed run lists every agent it ever made, but the watcher only holds
+  // as many transcripts as `limit` allows, so some rows have nothing to open.
+  const lanesById = new Map(((last && last.lanes) || []).map(l => [l.id, l]));
+
+  // The run's own span. Bars are placed as a percentage of it, so nothing is
+  // measured and the panel renders correctly even while its tab is hidden.
+  const starts = agents.map(a => a.started_ms).filter(Boolean);
+  const ends = agents.map(a => a.ended_ms || a.started_ms).filter(Boolean);
+  const t0 = starts.length ? Math.min(...starts) : 0;
+  // While a run is live the right edge is NOW, not the last finished agent, so
+  // the whole chart keeps stretching and a running bar visibly grows. Pinning
+  // it to the last end instead would make every live agent sit at exactly 100%
+  // and look finished.
+  const live = run.status === "running";
+  const t1 = live ? Math.max(run.now_ms || Date.now(), ...(ends.length ? ends : [0]))
+                  : (ends.length ? Math.max(...ends) : 0);
+  const span = Math.max(1, t1 - t0);
+
+  // Group by declared phase. Phase membership is recorded per agent in the run
+  // record, so this is read, not guessed. Agents with no phase (an in-flight
+  // run has no record yet) fall into one unnamed group rather than vanishing.
+  const groups = [];
+  const seen = new Map();
+  for (const a of agents) {
+    const key = a.phase || "";
+    if (!seen.has(key)) { seen.set(key, { title: key, idx: a.phase_index, rows: [] }); groups.push(seen.get(key)); }
+    seen.get(key).rows.push(a);
+  }
+  groups.sort((x, y) => (x.idx ?? 99) - (y.idx ?? 99));
+  const detailOf = t => (run.phases || []).find(p => p.title === t)?.detail || "";
+
+  const body = groups.map(g => `
+    <div class="wf-phase">
+      ${g.title ? `<div class="ph-h">
+        <span class="ph-n">${g.idx != null ? "PHASE " + g.idx : "PHASE"}</span>
+        <span class="ph-t">${esc(g.title)}</span>
+        <span class="ph-d">${esc(detailOf(g.title))}</span>
+      </div>` : ""}
+      ${g.rows.map(a => {
+        const st = a.started_ms, en = a.ended_ms || a.started_ms;
+        const left = st ? ((st - t0) / span) * 100 : 0;
+        const wide = (st && en) ? Math.max(0.6, ((en - st) / span) * 100) : 0.6;
+        const working = a.state === "progress";
+        const cls = a.state === "done" ? "" : (a.state === "start" ? "start" : "progress");
+        // Only rows whose transcript is actually loaded can be opened. Marking
+        // the rest plainly beats a row that looks clickable and does nothing.
+        const openable = a.agent_id && lanesById.has("agent-" + a.agent_id);
+        return `<div class="wf-bar${working ? " working" : ""}${openable ? " openable" : ""}"
+          data-agent="${esc(a.agent_id || "")}"
+          ${openable ? `data-id="agent-${esc(a.agent_id)}" role="button" tabindex="0"
+             title="Open ${esc(a.label)}"` : ""}>
+          <span class="lb" title="${esc(a.label)}">${working ? `<span class="dot"></span>` : ""}${
+            esc(a.label || a.agent_id || "agent")}</span>
+          <span class="track"><span class="fill ${cls}"
+            style="left:${left.toFixed(2)}%;width:${Math.min(wide, 100 - left).toFixed(2)}%"></span></span>
+          <span class="nums">${a.duration_ms ? wfDur(a.duration_ms) : esc(a.state || "")}${
+            a.tokens ? " · " + short(a.tokens) : ""}${
+            working && a.last_tool ? " · " + esc(a.last_tool) : ""}</span>
+        </div>`;
+      }).join("")}
+    </div>`).join("");
+
+  const axis = t1 > t0
+    ? `<div class="wf-axis"><span>elapsed</span><span class="ticks">
+         <span>0s</span><span>${wfDur(span * 0.25)}</span><span>${wfDur(span / 2)}</span>
+         <span>${wfDur(span * 0.75)}</span><span>${wfDur(span)}</span>
+       </span><span></span></div>`
+    : "";
+
+  const err = run.error
+    ? `<div class="wf-err">${esc(String(run.error).slice(0, 900))}</div>` : "";
+
+  // A killed run's agents mostly never started, so say so rather than drawing
+  // 36 empty bars and letting the reader assume they ran and produced nothing.
+  const never = agents.filter(a => a.state === "start").length;
+  const note = never
+    ? `<p class="wf-none" style="padding:6px 2px">${never} of ${agents.length}
+       agents were queued and never started. The run ended first.</p>` : "";
+
+  const res = full && full.result != null
+    ? `<details class="wf-sec"><summary>Returned value</summary>
+       <pre>${esc(JSON.stringify(full.result, null, 2).slice(0, 12000))}</pre></details>` : "";
+  const scr = full && full.script
+    ? `<details class="wf-sec"><summary>Script${full.script_truncated ? " (truncated)" : ""}</summary>
+       <pre>${esc(full.script)}</pre></details>` : "";
+  const logs = (run.logs || []).length
+    ? `<details class="wf-sec"><summary>Log (${run.logs.length})</summary>
+       <pre>${esc(run.logs.join("\n"))}</pre></details>` : "";
+
+  return `
+    <div class="wf-head">
+      <h2>${esc(run.name)}</h2>
+      <div class="meta">${esc(run.run_id)} &nbsp;·&nbsp;
+        <span class="wf-st ${esc(run.status)}">${WF_GLYPH[run.status] || ""} ${esc(run.status)}</span>
+        ${run.model ? " &nbsp;·&nbsp; " + esc(run.model) : ""}</div>
+    </div>
+    ${run.summary ? `<p style="margin:0 0 12px;font-size:12.5px">${esc(run.summary)}</p>` : ""}
+    ${err}
+    <div class="wf-kpi">
+      <div><span class="k">Agents</span><span class="v">${run.agent_count ?? agents.length}</span></div>
+      <div><span class="k">Live</span><span class="v">${run.live || 0}</span></div>
+      <div><span class="k">Phases</span><span class="v">${(run.phases || []).length || "—"}</span></div>
+      <div><span class="k">Duration</span><span class="v">${wfDur(run.duration_ms)}</span></div>
+      <div><span class="k">Output tok</span><span class="v">${short(run.total_tokens || 0)}</span></div>
+      <div><span class="k">Tool calls</span><span class="v">${fmt(run.total_tools || 0)}</span></div>
+    </div>
+    ${note}
+    ${axis}
+    ${body || `<p class="wf-none">No agent timing recorded for this run.</p>`}
+    ${res}${scr}${logs}`;
+}
+
 function paint(s) {
   syncOptions(s.lanes);
   const f = filters();
@@ -1514,6 +1885,26 @@ function paint(s) {
   }).join("") || `<tr><td colspan="8" class="doing">No agents in view.</td></tr>`);
   sizeRoster();
 
+  // Workflows. Deliberately ABOVE the contentWidth early-return below: that
+  // guard exists because the tree measures zero while another tab is showing,
+  // and everything after it stops updating. A panel that only repaints when
+  // its own tab is hidden is the wrong way round.
+  paintWorkflows(s.workflows || []);
+
+  // The inspector, hoisted above the contentWidth early-return below. It used
+  // to render after it, which meant clicking an agent while the tree was
+  // hidden set the state, repainted, bailed before this line, and opened
+  // nothing. Searching every lane rather than only the tree ones, because the
+  // Workflows tab lists agents that are in neither `shown` nor `parked`.
+  const openLane = inspecting
+    ? ((s.lanes || []).find(l => l.id === inspecting) || null)
+    : null;
+  const ov = document.getElementById("overlay");
+  ov.hidden = !openLane;
+  setHTML(ov, openLane ? nodeHTML(openLane, openLane.name, true) : "");
+  // Stop the board scrolling away behind the open card.
+  document.body.style.overflow = openLane ? "hidden" : "";
+
   // Render one band per depth: root on top, then whatever it spawned, then
   // whatever those spawned. Children end up beneath their own parent.
   const tiersEl = document.getElementById("tiers");
@@ -1548,19 +1939,6 @@ function paint(s) {
     renderTiers(g.lanes, fit, s.generated_at)).join(""));
 
   // The opened agent is drawn once more, on top, leaving the board untouched.
-  // Look through the parked agents as well as the deployed ones. Searching
-  // only the tree meant clicking anything under "not assigned" set the state,
-  // repainted, found nothing to open, and looked for all the world like a
-  // dead card. Same for its roster row, which goes through this same lookup.
-  const openLane = inspecting
-    ? ([...shown, ...parked].find(l => l.id === inspecting) || null)
-    : null;
-  const ov = document.getElementById("overlay");
-  ov.hidden = !openLane;
-  setHTML(ov, openLane ? nodeHTML(openLane, openLane.name, true) : "");
-  // Stop the board scrolling away behind the open card.
-  document.body.style.overflow = openLane ? "hidden" : "";
-
   touchClocks(shown);
   // setHTML rebuilds the balloons, so anything the reader had opened has to be
   // reopened or it would snap shut under them on the next poll.
@@ -1713,6 +2091,23 @@ let inspecting = null;   // lane id, survives repaints
 /** Delegated so it keeps working after every repaint. */
 document.addEventListener("click", (e) => {
   if (!last) return;
+  // Selecting a workflow run. Handled before the card logic below because a
+  // run button is not an agent card and must not fall through to the
+  // inspector, which would look up a lane id that does not exist.
+  const wfBtn = e.target.closest("[data-wf]");
+  if (wfBtn) {
+    wfPick = wfBtn.dataset.wf;
+    paintWorkflows(last.workflows || []);
+    return;
+  }
+  // A timeline row opens the same card the tree opens. The dispatch below
+  // matches tr[data-id], and these are divs, so they need their own branch.
+  const wfRow = e.target.closest(".wf-bar[data-id]");
+  if (wfRow) {
+    inspecting = inspecting === wfRow.dataset.id ? null : wfRow.dataset.id;
+    paint(last);
+    return;
+  }
   if (e.target.closest(".back")) { inspecting = null; paint(last); return; }
   // Clicking the dimmed area around the open card closes it, the way any
   // overlay behaves. Clicking inside it must not.
@@ -1805,12 +2200,18 @@ async function loadIndex() {
 /** Query string for the current scope, so the server reads the right files. */
 function scopeQuery() {
   const group = F("f-group").value;
+  // Workflow scope rides along on the same poll rather than a second request.
+  // It is separate from the agent scope on purpose: the tree is about this
+  // session, the runs list is a log you browse across sessions.
+  const wf = "wfscope=" + encodeURIComponent(wfScope);
   if (group === "project") {
     const slugs = [...F("f-projects").selectedOptions].map(o => o.value);
-    return slugs.length ? "?project=" + encodeURIComponent(slugs.join(",")) : "";
+    return slugs.length
+      ? "?project=" + encodeURIComponent(slugs.join(",")) + "&" + wf
+      : "?" + wf;
   }
   const s = F("f-session").value;
-  return s ? "?session=" + encodeURIComponent(s) : "";
+  return s ? "?session=" + encodeURIComponent(s) + "&" + wf : "?" + wf;
 }
 
 /** Only one picker is meaningful at a time. */
@@ -1900,17 +2301,89 @@ document.getElementById("zoomer").addEventListener("click", (e) => {
   stepZoom(how === "in" ? -1 : 1);   // ZOOM_STEPS runs largest first
 });
 
-document.getElementById("tabs").addEventListener("click", (e) => {
-  const btn = e.target.closest(".tab");
-  if (!btn) return;
+// The tab strip follows the WAI-ARIA Authoring Practices tab pattern. It was
+// five unlabelled <button>s in a <nav>: a screen reader announced them as
+// loose buttons with no indication they were a set, which one was current, or
+// what they controlled, and the arrow keys did nothing. The roles are applied
+// here rather than in the markup so the strip stays one line per tab.
+function wireTabs() {
+  const nav = document.getElementById("tabs");
+  const tabs = [...nav.querySelectorAll(".tab")];
+  nav.setAttribute("role", "tablist");
+  nav.setAttribute("aria-label", "Exhibit views");
+  for (const t of tabs) {
+    const v = t.dataset.view;
+    const sec = document.querySelector(`section[data-view="${v}"]`);
+    t.id = `tab-${v}`;
+    t.setAttribute("role", "tab");
+    if (sec) {
+      sec.id = `panel-${v}`;
+      sec.setAttribute("role", "tabpanel");
+      sec.setAttribute("aria-labelledby", t.id);
+      // Focusable so the panel itself is reachable from the tab, which is what
+      // lets a keyboard user get INTO the content rather than skipping past it.
+      sec.setAttribute("tabindex", "0");
+      t.setAttribute("aria-controls", sec.id);
+    }
+  }
+  syncTabA11y();
+
+  // Roving tabindex: one stop for the whole strip, then arrows within it.
+  // Tabbing through five tabs to reach the content is the thing the pattern
+  // exists to prevent.
+  nav.addEventListener("keydown", (e) => {
+    const cur = document.activeElement.closest?.(".tab");
+    if (!cur) return;
+    const i = tabs.indexOf(cur);
+    let n = null;
+    if (e.key === "ArrowRight") n = (i + 1) % tabs.length;
+    else if (e.key === "ArrowLeft") n = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === "Home") n = 0;
+    else if (e.key === "End") n = tabs.length - 1;
+    if (n === null) return;
+    e.preventDefault();
+    tabs[n].focus();
+    selectTab(tabs[n]);      // automatic activation, per the APG default
+  });
+}
+
+function syncTabA11y() {
+  for (const t of document.querySelectorAll("#tabs .tab")) {
+    const on = t.classList.contains("on");
+    t.setAttribute("aria-selected", on ? "true" : "false");
+    t.tabIndex = on ? 0 : -1;
+  }
+}
+
+function selectTab(btn) {
   for (const t of document.querySelectorAll(".tab")) t.classList.toggle("on", t === btn);
   for (const sec of document.querySelectorAll("section[data-view]")) {
     sec.hidden = sec.dataset.view !== btn.dataset.view;
   }
+  syncTabA11y();
   // Coming back to the tree, the board has to be re-solved against a container
   // that finally has a width again. Waiting for the next poll would show the
   // stale layout first.
   if (btn.dataset.view === "tree" && last) paint(last);
+  // Same reasoning for workflows: repaint on arrival instead of up to a second
+  // of an empty panel.
+  if (btn.dataset.view === "workflow" && last) paintWorkflows(last.workflows || []);
+}
+
+document.getElementById("tabs").addEventListener("click", (e) => {
+  const btn = e.target.closest(".tab");
+  if (!btn) return;
+  selectTab(btn);
+});
+wireTabs();
+
+F("wf-scope").addEventListener("change", (e) => {
+  wfScope = e.target.value;
+  // Widening the scope changes which runs exist, so the current pick may not
+  // survive. Clearing it lets paintWorkflows fall back to the newest rather
+  // than showing an empty detail pane for a run that is no longer listed.
+  wfPick = null;
+  tick();
 });
 
 F("f-zoom").innerHTML = `<option value="fit">fit</option>` +

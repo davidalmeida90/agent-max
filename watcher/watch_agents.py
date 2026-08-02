@@ -197,6 +197,14 @@ def _title_from_prompt(text: str, words: int = 5, chars: int = 34) -> str:
     # Drop harness-injected wrappers such as <ide_opened_file>...</...>.
     cleaned = re.sub(r"<[^>]+>.*?</[^>]+>", " ", text, flags=re.S)
     cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+    # Workflow prompts open on a markdown heading rather than a sentence, so
+    # the first "words" were "## Adversarial Claim Verifier (voter" with the
+    # hashes included. Take the heading's own text and stop at its newline:
+    # the line after it is a fresh sentence, and running the two together read
+    # as "## Source Extractor Research question:".
+    head = re.match(r"\s*#{1,6}\s+(.+)", cleaned)
+    if head:
+        cleaned = head.group(1)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     if not cleaned:
         return ""
@@ -755,16 +763,201 @@ def _peek(path: Path, keys: tuple[str, ...], limit: int = 40) -> dict:
     return found
 
 
+def _is_within(path: Path, root: Path) -> bool:
+    """True when `path` sits anywhere under `root`.
+
+    Path.is_relative_to landed in 3.9 and the watcher targets 3.9+, but it
+    raises on a mismatched drive on Windows rather than returning False, which
+    happens the moment a transcript and the projects root live on different
+    disks. Hence the try.
+    """
+    try:
+        return path.resolve().is_relative_to(root.resolve())
+    except (ValueError, OSError):
+        return False
+
+
 def _session_agents(session: Path) -> list[Path]:
-    """Subagent transcripts live in <session-id>/subagents/ beside the file."""
+    """Subagent transcripts live in <session-id>/subagents/ beside the file.
+
+    Recursive, because a Workflow run nests its agents one level deeper, in
+    subagents/workflows/<runId>/, beside the journal.jsonl that indexes them.
+    A flat glob returned [] for those, and it failed silently: a session with
+    ten workflow agents on disk rendered a single lane and reported "1 of 1",
+    because agents_on_disk is computed from this same call. Their transcripts
+    are the same format as any other subagent's, so nothing downstream needs
+    to know the difference.
+    """
     d = session.with_suffix("") / "subagents"
     if not d.is_dir():
         return []
     try:
-        return sorted(d.glob("agent-*.jsonl"), key=lambda p: p.stat().st_mtime,
+        return sorted(d.rglob("agent-*.jsonl"), key=lambda p: p.stat().st_mtime,
                       reverse=True)
     except OSError:
         return []
+
+
+# A Workflow run writes two things in two places, and the interesting half is
+# the one that is easy to miss:
+#
+#   <session>/workflows/<runId>.json              the run record
+#   <session>/subagents/workflows/<runId>/        agent transcripts + journal
+#
+# journal.jsonl is deliberately minimal, {type, key, agentId, result} and no
+# timestamp, so it cannot name or time anything. Everything worth showing is in
+# the run record's `workflowProgress` array: per-agent label, phaseIndex,
+# phaseTitle, startedAt, durationMs, tokens and toolCalls. That array is the
+# only place an agent is mapped to the phase that spawned it.
+_WF_CACHE: dict[str, tuple[int, int, dict]] = {}
+
+
+def _workflow_runs(session: Path) -> dict:
+    """runId -> a normalised run record for every Workflow run in a session.
+
+    Returns {} when the session never ran one, which is the common case.
+    """
+    d = session.with_suffix("") / "workflows"
+    if not d.is_dir():
+        return {}
+
+    runs = {}
+    for meta in sorted(d.glob("wf_*.json")):
+        try:
+            st = meta.stat()
+            key = str(meta)
+            hit = _WF_CACHE.get(key)
+            if hit and hit[0] == st.st_size and hit[1] == st.st_mtime_ns:
+                runs[meta.stem] = hit[2]
+                continue
+            rec = json.loads(meta.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        prog = rec.get("workflowProgress") or []
+        agents = [p for p in prog if p.get("type") == "workflow_agent"]
+        phases = [p for p in prog if p.get("type") == "workflow_phase"]
+
+        # An agent that never started has no agentId, so it cannot be joined to
+        # a transcript. Both killed runs are full of these: 64 of the 424
+        # agents on this machine are state="start" with nothing behind them.
+        by_agent = {a["agentId"]: a for a in agents if a.get("agentId")}
+
+        run = {
+            "run_id": rec.get("runId") or meta.stem,
+            "name": rec.get("workflowName") or meta.stem,
+            # completed | killed | failed. Nothing else has ever been observed,
+            # and no in-flight status is ever written, so a run that is still
+            # going has no record here at all until it ends.
+            "status": rec.get("status") or "unknown",
+            "summary": rec.get("summary") or "",
+            "started_ms": rec.get("startTime"),
+            "ended_iso": rec.get("timestamp"),
+            "duration_ms": rec.get("durationMs") or 0,
+            "agent_count": rec.get("agentCount"),
+            "total_tokens": rec.get("totalTokens") or 0,
+            "total_tools": rec.get("totalToolCalls") or 0,
+            "model": rec.get("defaultModel"),
+            # Present only on killed/failed runs, a JS stack trace as a string.
+            "error": rec.get("error") or None,
+            "logs": [str(x) for x in (rec.get("logs") or [])],
+            "phases": [{"index": p.get("index"), "title": p.get("title") or "",
+                        "detail": p.get("detail") or ""} for p in phases]
+                      or [{"index": i + 1, "title": p.get("title") or "",
+                           "detail": p.get("detail") or ""}
+                          for i, p in enumerate(rec.get("phases") or [])],
+            "agents": [_wf_agent(a) for a in agents],
+            "by_agent_id": by_agent,
+            # result is null exactly when status != completed, and is a dict in
+            # almost every case but a bare markdown string in a few, so callers
+            # must type-check before reaching into it.
+            "result": rec.get("result"),
+            "has_result": rec.get("result") is not None,
+            "script": rec.get("script") or "",
+        }
+        _WF_CACHE[str(meta)] = (st.st_size, st.st_mtime_ns, run)
+        runs[run["run_id"]] = run
+    return runs
+
+
+# Scanning every project for run records costs a directory walk, and the tab
+# polls once a second. Runs appear on a human timescale, so a short TTL is
+# plenty; the per-file _WF_CACHE underneath makes repeat scans nearly free.
+_WF_SCAN: dict = {}
+
+
+def _workflow_runs_scoped(scope: str, paths: list[Path]) -> dict:
+    """Run records for a scope wider than the session in view.
+
+    The agent tree is deliberately scoped to one session: it answers what is
+    happening now. Workflow runs are a log, and the run you want to look at is
+    usually not the one this session produced, so the tab scopes separately.
+
+      session  the sessions currently in view (the default, and the old behaviour)
+      project  every session in those sessions' project folders
+      all      every project on disk
+    """
+    if scope not in ("project", "all"):
+        runs = {}
+        for p in paths:
+            if "subagents" not in p.parts:
+                runs.update(_workflow_runs(p))
+        return runs
+
+    now = time.time()
+    hit = _WF_SCAN.get(scope)
+    if hit and now - hit[0] < 10:
+        return hit[1]
+
+    if scope == "all":
+        roots = [d for d in _projects_root().iterdir() if d.is_dir()]
+    else:
+        roots = sorted({p.parent for p in paths if "subagents" not in p.parts})
+
+    runs = {}
+    for root in roots:
+        try:
+            for meta in root.glob("*/workflows/wf_*.json"):
+                # <project>/<session>/workflows/x.json -> the session transcript
+                runs.update(_workflow_runs(meta.parent.parent.with_suffix(".jsonl")))
+        except OSError:
+            continue
+    _WF_SCAN[scope] = (now, runs)
+    return runs
+
+
+def _wf_agent(a: dict) -> dict:
+    """One workflowProgress agent entry, flattened to what the UI needs."""
+    started = a.get("startedAt")
+    dur = a.get("durationMs")
+    return {
+        "index": a.get("index"),
+        "agent_id": a.get("agentId"),
+        # The label the script gave it ("search:Metric recipes"). Far better
+        # than anything derivable from the transcript, whose prompts open on a
+        # markdown heading rather than "You are the X agent".
+        "label": a.get("label") or "",
+        "phase_index": a.get("phaseIndex"),
+        "phase": a.get("phaseTitle") or "",
+        "model": a.get("model") or "",
+        # done | progress | start. "start" means queued and never reported.
+        "state": a.get("state") or "",
+        "attempt": a.get("attempt"),
+        "queued_ms": a.get("queuedAt"),
+        "started_ms": started,
+        "duration_ms": dur,
+        # Derived rather than stored. startedAt + durationMs overshoots the
+        # transcript's last line by up to 8s, so this is good enough to draw a
+        # bar with and not good enough to quote as an end time.
+        "ended_ms": (started + dur) if (started and dur) else None,
+        "tokens": a.get("tokens") or 0,
+        "tool_calls": a.get("toolCalls") or 0,
+        "last_tool": a.get("lastToolName") or "",
+        "last_tool_detail": a.get("lastToolSummary") or "",
+        "prompt_preview": a.get("promptPreview") or "",
+        "result_preview": a.get("resultPreview") or "",
+        "agent_type": a.get("agentType") or "",
+    }
 
 
 def build_index(max_sessions: int = 5) -> dict:
@@ -939,7 +1132,12 @@ def discover(source: Path | None, limit: int) -> list[Path]:
             return ([newest] + own)[:limit]
         # No subagents folder yet: either nothing has been spawned, or these
         # are Workflow transcripts, which sit flat next to a journal.jsonl.
-        beside = [w for w in workers if w.parent == newest.parent]
+        # Relative-to rather than an equality on .parent, because a workflow's
+        # agents live under <session>/subagents/workflows/<runId>/ and an
+        # equality test on the immediate parent discards every one of them.
+        stem = newest.with_suffix("")
+        beside = [w for w in workers
+                  if w.parent == newest.parent or _is_within(w, stem)]
         return ([newest] + beside)[:limit]
 
     # Workflow-only run: agent transcripts with no interactive session at all.
@@ -1041,9 +1239,119 @@ def _ui_mtime() -> float | None:
 
 
 
+# Fields heavy enough to matter on a one-second poll. A 104-agent run carries
+# a promptPreview and a resultPreview per agent; shipping those every second is
+# ~40x the bytes of the summary for data nobody is reading until they click.
+# They live behind /workflow.json?run=<id> instead.
+_WF_LEAN = ("index", "agent_id", "label", "phase", "phase_index", "state",
+            "model", "started_ms", "duration_ms", "ended_ms", "tokens",
+            "tool_calls", "last_tool")
+
+
+def _workflow_summaries(runs: dict, lanes: list[dict]) -> list[dict]:
+    """The workflow block for /state.json, newest run first.
+
+    Two populations are merged. Runs that ENDED have a record on disk. Runs
+    still in flight have no record at all, only live transcripts, so they are
+    synthesised from the lanes and marked status="running". Without that, a
+    workflow you are watching right now is the one thing the tab cannot show.
+    """
+    out = []
+    for run in runs.values():
+        live = [l for l in lanes if l.get("workflow") == run["run_id"]
+                and l["status"] == "live"]
+        out.append({
+            k: run[k] for k in
+            ("run_id", "name", "status", "summary", "started_ms", "ended_iso",
+             "duration_ms", "agent_count", "total_tokens", "total_tools",
+             "model", "error", "has_result", "phases")
+        } | {
+            "agents": [{k: a.get(k) for k in _WF_LEAN} for a in run["agents"]],
+            "live": len(live),
+            "on_disk": sum(1 for l in lanes
+                           if l.get("workflow") == run["run_id"]),
+            "logs": run["logs"][:20],
+        })
+
+    # In-flight runs. A run writes no record until it ENDS, so while you are
+    # watching one there is no name, no phase list and no timing on disk. All
+    # of it has to be rebuilt from the transcripts, which ARE being written
+    # live. Without this the one run you actually care about is the one the tab
+    # cannot draw.
+    known = set(runs)
+    in_flight = {str(l["workflow"]) for l in lanes if l.get("workflow")}
+    now_ms = time.time() * 1000.0
+
+    def _ms(iso: str | None):
+        d = _parse_ts(iso)
+        return d.timestamp() * 1000.0 if d else None
+
+    for run_id in sorted(in_flight - known):
+        members = [l for l in lanes if l.get("workflow") == run_id]
+        starts = [s for s in (_ms(l["started"]) for l in members) if s]
+        t0 = min(starts) if starts else None
+        agents = []
+        for i, l in enumerate(members):
+            st = _ms(l["started"])
+            live = l["status"] == "live"
+            # A live agent has not ended, so its bar runs to NOW and grows on
+            # every poll. A finished one stops at its last written record.
+            en = now_ms if live else (_ms(l["last_seen"]) or st)
+            agents.append({
+                "index": i, "agent_id": l["id"][len("agent-"):],
+                "label": l["name"], "phase": "", "phase_index": None,
+                "state": "progress" if live else "done",
+                "model": l["model"], "started_ms": st,
+                "duration_ms": int(en - st) if (st and en) else None,
+                "ended_ms": en, "tokens": l["output_tokens"],
+                "tool_calls": l["tool_count"],
+                # What it is doing this second. Only meaningful while live, and
+                # it is the difference between "an agent is running" and
+                # "an agent is running a WebSearch".
+                "last_tool": ((l.get("tools") or [{}])[-1].get("name") or "")
+                             if live else "",
+            })
+        agents.sort(key=lambda a: a["started_ms"] or 0)
+        for i, a in enumerate(agents):
+            a["index"] = i
+        out.append({
+            "run_id": run_id, "name": run_id, "status": "running",
+            "summary": "", "started_ms": int(t0) if t0 else None,
+            "ended_iso": None,
+            "duration_ms": int(now_ms - t0) if t0 else 0,
+            "agent_count": len(members),
+            "total_tokens": sum(l["output_tokens"] for l in members),
+            "total_tools": sum(l["tool_count"] for l in members),
+            "model": members[0]["model"] if members else "",
+            "error": None, "has_result": False, "phases": [],
+            "agents": agents,
+            "live": sum(1 for l in members if l["status"] == "live"),
+            "on_disk": len(members),
+            "logs": [],
+            # Tells the UI to keep re-scaling against a moving right edge
+            # instead of a fixed one.
+            "now_ms": int(now_ms),
+        })
+
+    # Newest first. started_ms is epoch ms on real runs and absent on in-flight
+    # ones, so fall back to the earliest transcript timestamp for those.
+    def when(r):
+        return r.get("started_ms") or 0
+    out.sort(key=when, reverse=True)
+    # An in-flight run sorts to 0 under that key, which would bury the one run
+    # you are actually watching. Hoist anything still running to the top.
+    out.sort(key=lambda r: r["status"] != "running")
+    return out
+
+
 def build_state(paths: list[Path], exclude: tuple[str, ...] = (),
                 recent_s: float | None = None,
-                session_only: bool = True) -> dict:
+                session_only: bool = True,
+                wf_scope: str = "session") -> dict:
+    # Workflow run records, keyed by runId. Read once per build rather than per
+    # lane: a 104-agent run would otherwise re-parse the same record 104 times.
+    wf_runs: dict = _workflow_runs_scoped(wf_scope, paths)
+
     lanes = []
     for p in paths:
         lane = read_lane(p)
@@ -1052,6 +1360,29 @@ def build_state(paths: list[Path], exclude: tuple[str, ...] = (),
         # Substring match so "fable" filters claude-fable-5 and friends.
         if any(tok.lower() in lane["model"].lower() for tok in exclude if tok):
             continue
+        # A workflow agent sits at <session>/subagents/workflows/<runId>/, so
+        # its run is named by the directory holding it. Attaching here, where
+        # the path is still in scope, avoids threading it through read_lane's
+        # cache, which is keyed on the transcript's own size and mtime and
+        # would serve a stale label after the run record was rewritten.
+        if p.parent.parent.name == "workflows":
+            run = wf_runs.get(p.parent.name)
+            entry = (run or {}).get("by_agent_id", {}).get(
+                lane["id"][len("agent-"):]) or {}
+            lane["workflow"] = p.parent.name
+            lane["wf_phase"] = entry.get("phaseTitle") or ""
+            lane["wf_label"] = entry.get("label") or ""
+            # The script's own label beats anything inferred from the prompt.
+            # Workflow prompts open on a markdown heading, not "You are the X
+            # agent", so the inferred name was the first 38 characters of the
+            # brief: "## Adversarial Claim Verifier (voter 2".
+            if lane["wf_label"]:
+                lane["name"] = lane["wf_label"][:44]
+                lane["role_derived"] = True
+        else:
+            lane["workflow"] = None
+            lane["wf_phase"] = ""
+            lane["wf_label"] = ""
         # Recency decides which SESSION is worth watching, never which of its
         # agents. discover() now returns a session together with its own
         # subagents, so an old worker is old because the work finished, not
@@ -1225,6 +1556,11 @@ def build_state(paths: list[Path], exclude: tuple[str, ...] = (),
         # CSS change lands in an open browser without a manual refresh.
         "ui_mtime": _ui_mtime(),
         "lanes": lanes,
+        # Workflow runs belonging to the sessions in view, newest first. A run
+        # only gets a record when it ENDS, so an in-flight run is absent here
+        # while its agents are already present in `lanes`. The tab has to cope
+        # with that rather than assume the two sets agree.
+        "workflows": _workflow_summaries(wf_runs, lanes),
         "by_model": sorted(by_model.values(), key=lambda x: -x["billed_tokens"]),
         "totals": {
             "lanes": len(lanes),
@@ -1296,6 +1632,37 @@ class Handler(SimpleHTTPRequestHandler):
             self._json(_INDEX_CACHE["data"])
             return
 
+        # One run in full: the script it ran, what it returned, and every
+        # agent's prompt and result preview. Fetched on click rather than
+        # folded into /state.json, because that is polled every second and this
+        # payload is roughly forty times the size of the summary.
+        if route == "/workflow.json":
+            want = (query.get("run") or [""])[0].strip()
+            found = None
+            for sdir in {p.parent.parent
+                         for p in _projects_root().glob("*/*/workflows/wf_*.json")}:
+                runs = _workflow_runs(sdir.with_suffix(".jsonl"))
+                if want in runs:
+                    found = runs[want]
+                    break
+            if not found:
+                self._json({"ok": False, "run": want,
+                            "reason": "no run record on disk. A run in flight "
+                                      "has not written one yet."})
+                return
+            self._json({
+                "ok": True,
+                **{k: found[k] for k in
+                   ("run_id", "name", "status", "summary", "started_ms",
+                    "ended_iso", "duration_ms", "agent_count", "total_tokens",
+                    "total_tools", "model", "error", "logs", "phases")},
+                "agents": found["agents"],
+                "result": found["result"],
+                "script": found["script"][:40000],
+                "script_truncated": len(found["script"]) > 40000,
+            })
+            return
+
         if route == "/state.json":
             scope = {
                 "session": (query.get("session") or [""])[0].strip(),
@@ -1308,18 +1675,30 @@ class Handler(SimpleHTTPRequestHandler):
             # An explicit pick is a request to see that thing, so the
             # "current session only" and recency filters must not veto it.
             explicit = bool(scope["session"] or scope["projects"])
+            # Workflow scope is deliberately separate from the agent scope. The
+            # tree answers "what is running now" and belongs to one session;
+            # the runs list is a log, and the run worth opening is usually not
+            # one this session produced.
+            wf_scope = (query.get("wfscope") or ["session"])[0].strip()
             state = build_state(
                 paths, self._exclude,
                 None if explicit else self._recent_s,
-                False if explicit else self._session_only)
+                False if explicit else self._session_only,
+                wf_scope=wf_scope)
             state["scope"] = scope
+            state["wf_scope"] = wf_scope if wf_scope in ("project", "all") else "session"
             # How many agents the session really has, counted on disk rather
             # than inferred from what got rendered. The limit truncates the
             # file list, so a board showing 15 of 36 used to call itself
             # "16 of 16": the total was computed after the cut.
+            # "subagents" not in parts, rather than a test on the immediate
+            # parent: a workflow agent's parent is its wf_<id> directory, so
+            # the old form treated every one of them as a session and called
+            # _session_agents on it, which is how a ten-agent session reported
+            # itself as "1 of 1".
             state["agents_on_disk"] = sum(
                 len(_session_agents(p)) for p in paths
-                if p.parent.name != "subagents")
+                if "subagents" not in p.parts)
             self._json(state)
             return
 

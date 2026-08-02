@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.3.0]
+
+**Workflow runs get their own tab, beside Agents.**
+
+- A run list with status, agent count and duration, plus a timeline of the
+  selected run grouped by the phase that spawned each agent. Phases, labels and
+  per-agent timing are read from the run record rather than guessed, so a
+  pipeline and a barrier look different on screen.
+- **Runs in flight are rebuilt from transcripts.** A workflow writes its record
+  only when it ends, so while you are watching one there is nothing on disk
+  naming it. Bars now run to now and grow, working agents pulse, and each row
+  names the tool it is running this second.
+- Click any agent on a timeline to open the same card the tree opens. The
+  inspector moved out of the tree section to make that possible; it was
+  `display:none` on every other tab.
+- Runs are scoped separately from the agent tree: this session, this project,
+  or everywhere.
+
+Fixes found while building it:
+
+- **Workflow agents were invisible.** Agent discovery globbed
+  `subagents/` without recursing, and a workflow writes to
+  `subagents/workflows/<runId>/`. A session with ten workflow agents rendered
+  one lane and reported "1 of 1".
+- Agent names no longer leak markdown. A workflow prompt opens on a heading, so
+  names read `## Adversarial Claim Verifier (voter 2` instead of the role.
+- No more horizontal scrolling in a narrow side panel. The session picker and
+  the "other session active" badge pushed the whole page sideways below about
+  700px, on every tab.
+- The tab strip now follows the WAI-ARIA tab pattern: roles, `aria-selected`,
+  a roving tabindex, and arrow-key navigation with Home and End. It was five
+  unlabelled buttons a screen reader announced as unrelated.
+
 ## [0.2.1]
 
 - The status bar item stays visible instead of hiding when nothing is running,

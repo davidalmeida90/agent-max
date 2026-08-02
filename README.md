@@ -90,6 +90,25 @@ put it.
 
 ## Features
 
+### Workflow runs, with their phases
+
+A workflow is not an ad-hoc agent tree. It declares its phases up front, its
+agents get labels from the script, and it keeps a status after every agent is
+gone. So it gets its own tab.
+
+Each run shows a timeline built from real timestamps, grouped by the phase that
+spawned each agent, which is how you see whether a stage pipelined or waited.
+Overlapping bars mean concurrency; one long bar starting late means a barrier.
+Click any agent to open the same card the tree opens.
+
+**A run still in flight has written no record yet**, so its name, phases and
+timing are rebuilt from the transcripts. Its bars run to now and grow while you
+watch, working agents pulse, and each row names the tool it is running this
+second.
+
+Runs are scoped separately from the agent tree, because the tree is about this
+session and a run you want to read usually is not.
+
 ### The tree, to any depth
 
 Agents that spawn their own agents nest under them. A run three levels deep
